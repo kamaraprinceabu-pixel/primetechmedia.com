@@ -1,0 +1,36 @@
+@media (max-width: 991px) {
+  .hero-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .stat-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 767px) {
+  section {
+    padding: 70px 0;
+  }
+
+  .hero-section {
+    padding-top: 100px;
+  }
+
+  .hero-actions {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .stat-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .filter-buttons {
+    justify-content: flex-start;
+  }
+
+  .newsletter-form {
+    flex-direction: column;
+  }
+}

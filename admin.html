@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Admin Dashboard | Prime Tech & Media Consultancy</title>
+    <meta name="description" content="Local admin dashboard for viewing submissions stored on the website." />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
+    <link rel="stylesheet" href="https://unpkg.com/aos@2.3.1/dist/aos.css" />
+    <link rel="stylesheet" href="style.css" />
+    <link rel="stylesheet" href="responsive.css" />
+  </head>
+  <body>
+    <div id="preloader">
+      <div class="spinner">
+        <div class="bounce1"></div>
+        <div class="bounce2"></div>
+        <div class="bounce3"></div>
+      </div>
+    </div>
+
+    <nav class="navbar navbar-expand-lg sticky-top">
+      <div class="container">
+        <a class="navbar-brand" href="index.html"><span class="brand-logo-wrap"><img src="assets/logo/prime.png" alt="Prime Tech icon" class="brand-logo-icon" /></span><span class="brand-text">PRIME TECH & MEDIA</span></a>
+        <div class="collapse navbar-collapse">
+          <ul class="navbar-nav ms-auto align-items-lg-center">
+            <li class="nav-item"><a class="nav-link" href="index.html">Home</a></li>
+            <li class="nav-item"><a class="nav-link" href="booking.html">Booking</a></li>
+            <li class="nav-item"><a class="nav-link" href="contact.html">Contact</a></li>
+            <li class="nav-item"><a class="btn btn-primary ms-lg-3" href="admin.html">Admin</a></li>
+          </ul>
+        </div>
+      </div>
+    </nav>
+
+    <main>
+      <section class="page-hero">
+        <div class="container">
+          <p class="eyebrow">Admin Dashboard</p>
+          <h1>Manage form submissions securely</h1>
+          <p>Access the dashboard with your admin password, review every request, and act on it directly.</p>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="container">
+          <div id="adminLoginCard" class="admin-panel">
+            <h3 class="mb-3">Admin access</h3>
+            <p class="text-muted">Use the password saved in your browser to continue.</p>
+            <form id="adminLoginForm" class="row g-3 align-items-end">
+              <div class="col-md-8">
+                <label class="form-label" for="adminPassword">Password</label>
+                <input id="adminPassword" class="form-control" type="password" placeholder="Enter admin password" required />
+              </div>
+              <div class="col-md-4">
+                <button class="btn btn-primary w-100" type="submit">Unlock</button>
+              </div>
+            </form>
+          </div>
+
+          <div id="adminDashboard" class="admin-panel d-none">
+            <div class="admin-layout">
+              <aside class="admin-sidebar">
+                <div class="sidebar-brand">
+                  <h3>Admin</h3>
+                  <p>Prime Tech & Media</p>
+                </div>
+                <nav class="admin-nav">
+                  <button type="button" class="admin-nav-item active" data-section="dashboard">🏠 Dashboard</button>
+                  <button type="button" class="admin-nav-item" data-section="analytics">📊 Analytics</button>
+                  <button type="button" class="admin-nav-item" data-section="clients">👥 Clients</button>
+                  <button type="button" class="admin-nav-item" data-section="bookings">📅 Bookings</button>
+                  <button type="button" class="admin-nav-item" data-section="projects">📁 Projects</button>
+                  <button type="button" class="admin-nav-item" data-section="services">💼 Services</button>
+                  <button type="button" class="admin-nav-item" data-section="finance">💰 Finance</button>
+                  <button type="button" class="admin-nav-item" data-section="quotations">📄 Quotations</button>
+                  <button type="button" class="admin-nav-item" data-section="invoices">🧾 Invoices</button>
+                  <button type="button" class="admin-nav-item" data-section="contact-forms">📩 Contact Forms</button>
+                  <button type="button" class="admin-nav-item" data-section="portfolio">🖼 Portfolio</button>
+                  <button type="button" class="admin-nav-item" data-section="website-cms">📰 Website CMS</button>
+                  <button type="button" class="admin-nav-item" data-section="testimonials">⭐ Testimonials</button>
+                  <button type="button" class="admin-nav-item" data-section="marketing">📢 Marketing</button>
+                  <button type="button" class="admin-nav-item" data-section="file-manager">📂 File Manager</button>
+                  <button type="button" class="admin-nav-item" data-section="staff">👨‍💼 Staff</button>
+                  <button type="button" class="admin-nav-item" data-section="notifications">🔔 Notifications</button>
+                  <button type="button" class="admin-nav-item" data-section="ai-assistant">🤖 AI Assistant</button>
+                  <button type="button" class="admin-nav-item" data-section="settings">⚙️ Settings</button>
+                  <button type="button" class="admin-nav-item" data-section="security">🔒 Security</button>
+                  <button type="button" class="admin-nav-item" data-section="reports">📈 Reports</button>
+                </nav>
+                <div class="sidebar-footer">
+                  <button id="logoutAdminBtn" class="btn btn-outline w-100">🚪 Logout</button>
+                </div>
+              </aside>
+
+              <div class="admin-content">
+                <div class="admin-section admin-section--active" data-section="dashboard">
+                  <div class="admin-toolbar">
+                    <div>
+                      <h3 class="mb-1">Dashboard</h3>
+                      <p class="mb-0 text-muted">Overview of submissions, bookings, and project activity.</p>
+                    </div>
+                    <div class="d-flex gap-2 flex-wrap">
+                      <select id="submissionFilter" class="form-select">
+                        <option value="all">All</option>
+                        <option value="booking">Bookings</option>
+                        <option value="contact">Contact</option>
+                        <option value="newsletter">Newsletter</option>
+                      </select>
+                      <button id="clearSubmissionsBtn" class="btn btn-outline">Clear All</button>
+                    </div>
+                  </div>
+
+                  <div class="dashboard-metrics">
+                    <div class="metric-card">
+                      <h4>92</h4>
+                      <p>New leads this week</p>
+                    </div>
+                    <div class="metric-card">
+                      <h4>27</h4>
+                      <p>Open bookings</p>
+                    </div>
+                    <div class="metric-card">
+                      <h4>14</h4>
+                      <p>Active projects</p>
+                    </div>
+                    <div class="metric-card">
+                      <h4>7</h4>
+                      <p>Pending invoices</p>
+                    </div>
+                  </div>
+
+                  <div class="admin-features-panel">
+                    <h4>Available admin sections</h4>
+                    <div class="feature-pill-grid">
+                      <span class="feature-pill">🏠 Dashboard</span>
+                      <span class="feature-pill">📊 Analytics</span>
+                      <span class="feature-pill">👥 Clients</span>
+                      <span class="feature-pill">📅 Bookings</span>
+                      <span class="feature-pill">📁 Projects</span>
+                      <span class="feature-pill">💼 Services</span>
+                      <span class="feature-pill">💰 Finance</span>
+                      <span class="feature-pill">📄 Quotations</span>
+                      <span class="feature-pill">🧾 Invoices</span>
+                      <span class="feature-pill">📩 Contact Forms</span>
+                      <span class="feature-pill">🖼 Portfolio</span>
+                      <span class="feature-pill">📰 Website CMS</span>
+                      <span class="feature-pill">⭐ Testimonials</span>
+                      <span class="feature-pill">📢 Marketing</span>
+                      <span class="feature-pill">📂 File Manager</span>
+                      <span class="feature-pill">👨‍💼 Staff</span>
+                      <span class="feature-pill">🔔 Notifications</span>
+                      <span class="feature-pill">🤖 AI Assistant</span>
+                      <span class="feature-pill">⚙️ Settings</span>
+                      <span class="feature-pill">🔒 Security</span>
+                      <span class="feature-pill">📈 Reports</span>
+                      <span class="feature-pill">🚪 Logout</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="admin-section d-none" data-section="analytics">
+                  <div class="admin-panel admin-panel--subsection">
+                    <div class="admin-section-header">
+                      <h3>Analytics</h3>
+                      <p class="text-muted">Traffic, conversions, and performance at a glance.</p>
+                    </div>
+                    <p>Analytics charts and metrics will appear here once connected.</p>
+                  </div>
+                </div>
+
+                <div class="admin-section d-none" data-section="clients">
+                  <div class="admin-panel admin-panel--subsection">
+                    <div class="admin-section-header">
+                      <h3>Clients</h3>
+                      <p class="text-muted">Manage client relationships and company profiles.</p>
+                    </div>
+                    <p>Client management tools and records will appear here.</p>
+                  </div>
+                </div>
+
+                <div class="admin-section d-none" data-section="bookings">
+                  <div class="admin-panel admin-panel--subsection">
+                    <div class="admin-section-header">
+                      <h3>Bookings</h3>
+                      <p class="text-muted">View and approve booking requests.</p>
+                    </div>
+                    <p>Booking request data will appear here.</p>
+                  </div>
+                </div>
+
+                <div class="admin-section d-none" data-section="projects">
+                  <div class="admin-panel admin-panel--subsection">
+                    <div class="admin-section-header">
+                      <h3>Projects</h3>
+                      <p class="text-muted">Track active and completed work.</p>
+                    </div>
+                    <p>Project management tools will appear here.</p>
+                  </div>
+                </div>
+
+                <div class="admin-section d-none" data-section="services">
+                  <div class="admin-panel admin-panel--subsection">
+                    <div class="admin-section-header">
+                      <h3>Services</h3>
+                      <p class="text-muted">Update service offerings and pricing.</p>
+                    </div>
+                    <p>Service catalog editing tools will appear here.</p>
+                  </div>
+                </div>
+
+                <div class="admin-section d-none" data-section="finance">
+                  <div class="admin-panel admin-panel--subsection">
+                    <div class="admin-section-header">
+                      <h3>Finance</h3>
+                      <p class="text-muted">View revenue, expenses, and payment status.</p>
+                    </div>
+                    <p>Financial summaries and cashflow reports will appear here.</p>
+                  </div>
+                </div>
+
+                <div class="admin-section d-none" data-section="quotations">
+                  <div class="admin-panel admin-panel--subsection">
+                    <div class="admin-section-header">
+                      <h3>Quotations</h3>
+                      <p class="text-muted">Create and manage price proposals.</p>
+                    </div>
+                    <p>Quotation drafting and tracking tools will appear here.</p>
+                  </div>
+                </div>
+
+                <div class="admin-section d-none" data-section="invoices">
+                  <div class="admin-panel admin-panel--subsection">
+                    <div class="admin-section-header">
+                      <h3>Invoices</h3>
+                      <p class="text-muted">Send invoices and monitor payment status.</p>
+                    </div>
+                    <p>Invoice management tools will appear here.</p>
+                  </div>
+                </div>
+
+                <div class="admin-section d-none" data-section="contact-forms">
+                  <div class="admin-panel admin-panel--subsection">
+                    <div class="admin-section-header">
+                      <h3>Contact Forms</h3>
+                      <p class="text-muted">Incoming messages and contact requests.</p>
+                    </div>
+                    <div class="table-responsive">
+                      <table class="submission-table">
+                        <thead>
+                          <tr>
+                            <th>Type</th>
+                            <th>Sender</th>
+                            <th>Details</th>
+                            <th>Date</th>
+                            <th>Contact</th>
+                            <th>Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody id="submissionsTableBody"></tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="admin-section d-none" data-section="portfolio">
+                  <div class="admin-panel admin-panel--subsection">
+                    <div class="admin-section-header">
+                      <h3>Portfolio</h3>
+                      <p class="text-muted">Manage showcased projects and case studies.</p>
+                    </div>
+                    <p>Portfolio item management tools will appear here.</p>
+                  </div>
+                </div>
+
+                <div class="admin-section d-none" data-section="website-cms">
+                  <div class="admin-panel admin-panel--subsection">
+                    <div class="admin-section-header">
+                      <h3>Website CMS</h3>
+                      <p class="text-muted">Edit website content, pages, and assets.</p>
+                    </div>
+                    <p>CMS content editing tools will appear here.</p>
+                  </div>
+                </div>
+
+                <div class="admin-section d-none" data-section="testimonials">
+                  <div class="admin-panel admin-panel--subsection">
+                    <div class="admin-section-header">
+                      <h3>Testimonials</h3>
+                      <p class="text-muted">Manage client reviews and social proof.</p>
+                    </div>
+                    <p>Testimonial management tools will appear here.</p>
+                  </div>
+                </div>
+
+                <div class="admin-section d-none" data-section="marketing">
+                  <div class="admin-panel admin-panel--subsection">
+                    <div class="admin-section-header">
+                      <h3>Marketing</h3>
+                      <p class="text-muted">Run campaigns, announcements, and promotions.</p>
+                    </div>
+                    <p>Marketing tools and campaign controls will appear here.</p>
+                  </div>
+                </div>
+
+                <div class="admin-section d-none" data-section="file-manager">
+                  <div class="admin-panel admin-panel--subsection">
+                    <div class="admin-section-header">
+                      <h3>File Manager</h3>
+                      <p class="text-muted">Upload and organize documents and media.</p>
+                    </div>
+                    <p>File manager tools will appear here.</p>
+                  </div>
+                </div>
+
+                <div class="admin-section d-none" data-section="staff">
+                  <div class="admin-panel admin-panel--subsection">
+                    <div class="admin-section-header">
+                      <h3>Staff</h3>
+                      <p class="text-muted">Manage team members and roles.</p>
+                    </div>
+                    <p>Staff directory and role settings will appear here.</p>
+                  </div>
+                </div>
+
+                <div class="admin-section d-none" data-section="notifications">
+                  <div class="admin-panel admin-panel--subsection">
+                    <div class="admin-section-header">
+                      <h3>Notifications</h3>
+                      <p class="text-muted">Review alerts and system messages.</p>
+                    </div>
+                    <p>Notifications and announcement history will appear here.</p>
+                  </div>
+                </div>
+
+                <div class="admin-section d-none" data-section="ai-assistant">
+                  <div class="admin-panel admin-panel--subsection">
+                    <div class="admin-section-header">
+                      <h3>AI Assistant</h3>
+                      <p class="text-muted">Get task guidance and content help.</p>
+                    </div>
+                    <p>An AI assistant panel will appear here.</p>
+                  </div>
+                </div>
+
+                <div class="admin-section d-none" data-section="settings">
+                  <div class="admin-panel admin-panel--subsection">
+                    <div class="admin-section-header">
+                      <h3>Settings</h3>
+                      <p class="text-muted">Update admin preferences and integrations.</p>
+                    </div>
+                    <p>Settings controls will appear here.</p>
+                  </div>
+                </div>
+
+                <div class="admin-section d-none" data-section="security">
+                  <div class="admin-panel admin-panel--subsection">
+                    <div class="admin-section-header">
+                      <h3>Security</h3>
+                      <p class="text-muted">Review access and audit settings.</p>
+                    </div>
+                    <p>Security settings will appear here.</p>
+                  </div>
+                </div>
+
+                <div class="admin-section d-none" data-section="reports">
+                  <div class="admin-panel admin-panel--subsection">
+                    <div class="admin-section-header">
+                      <h3>Reports</h3>
+                      <p class="text-muted">Generate business and user reports.</p>
+                    </div>
+                    <p>Reports and export tools will appear here.</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <div class="container text-center">
+        <p>© 2026 Prime Tech & Media Consultancy. All Rights Reserved.</p>
+      </div>
+    </footer>
+
+    <script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
+    <script src="script.js"></script>
+  </body>
+</html>
