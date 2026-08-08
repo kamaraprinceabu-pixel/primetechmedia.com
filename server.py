@@ -1,5 +1,6 @@
 import json
 import os
+import secrets
 import urllib.request
 import urllib.error
 from datetime import datetime, timezone
@@ -11,12 +12,20 @@ PORT = int(os.environ.get("PORT", "8001"))
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "").rstrip("/")
 SUPABASE_SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_KEY", "")
 
+ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "")
+
 TABLE_URL = f"{SUPABASE_URL}/rest/v1/submissions"
+
+# Temporary in-memory admin sessions.
+# Sessions are cleared whenever the Render server restarts.
+ADMIN_SESSIONS = set()
 
 
 def supabase_request(method, url, data=None):
     if not SUPABASE_URL or not SUPABASE_SERVICE_KEY:
-        raise RuntimeError("Supabase environment variables are not configured")
+        raise RuntimeError(
+            "Supabase environment variables are not configured"
+        )
 
     headers = {
         "apikey": SUPABASE_SERVICE_KEY,
@@ -44,7 +53,11 @@ def supabase_request(method, url, data=None):
     )
 
     try:
-        with urllib.request.urlopen(request, timeout=30) as response:
+        with urllib.request.urlopen(
+            request,
+            timeout=30
+        ) as response:
+
             response_body = response.read().decode("utf-8")
 
             if not response_body:
@@ -88,47 +101,84 @@ class Handler(BaseHTTPRequestHandler):
         response = json.dumps(data).encode("utf-8")
 
         self.send_response(status)
+
         self.send_header(
             "Content-Type",
             "application/json"
         )
+
         self.send_header(
             "Content-Length",
             str(len(response))
         )
+
         self.send_header(
             "Access-Control-Allow-Origin",
             "*"
         )
+
         self.send_header(
             "Access-Control-Allow-Methods",
             "GET, POST, DELETE, OPTIONS"
         )
+
         self.send_header(
             "Access-Control-Allow-Headers",
             "Content-Type, Authorization"
         )
+
         self.end_headers()
 
         self.wfile.write(response)
 
     def do_OPTIONS(self):
         self.send_response(204)
+
         self.send_header(
             "Access-Control-Allow-Origin",
             "*"
         )
+
         self.send_header(
             "Access-Control-Allow-Methods",
             "GET, POST, DELETE, OPTIONS"
         )
+
         self.send_header(
             "Access-Control-Allow-Headers",
             "Content-Type, Authorization"
         )
+
         self.end_headers()
 
+    def get_auth_token(self):
+        authorization = self.headers.get(
+            "Authorization",
+            ""
+        )
+
+        if not authorization.startswith("Bearer "):
+            return None
+
+        return authorization[7:].strip()
+
+    def require_admin(self):
+        token = self.get_auth_token()
+
+        if not token or token not in ADMIN_SESSIONS:
+            self.send_json(
+                401,
+                {
+                    "error": "Unauthorized"
+                }
+            )
+
+            return False
+
+        return True
+
     def do_GET(self):
+
         if self.path == "/" or self.path == "":
             self.send_json(
                 200,
@@ -139,8 +189,24 @@ class Handler(BaseHTTPRequestHandler):
             )
             return
 
+        if self.path == "/api/admin/session":
+            if self.require_admin():
+                self.send_json(
+                    200,
+                    {
+                        "authenticated": True
+                    }
+                )
+
+            return
+
         if self.path.startswith("/api/submissions"):
+
+            if not self.require_admin():
+                return
+
             try:
+
                 submissions = supabase_request(
                     "GET",
                     f"{TABLE_URL}?select=*&order=created_at.desc"
@@ -149,6 +215,7 @@ class Handler(BaseHTTPRequestHandler):
                 formatted = []
 
                 for submission in submissions:
+
                     item = dict(submission)
 
                     item["createdAt"] = item.get(
@@ -157,9 +224,13 @@ class Handler(BaseHTTPRequestHandler):
 
                     formatted.append(item)
 
-                self.send_json(200, formatted)
+                self.send_json(
+                    200,
+                    formatted
+                )
 
             except Exception as error:
+
                 print(
                     f"GET submissions error: {error}",
                     flush=True
@@ -182,16 +253,110 @@ class Handler(BaseHTTPRequestHandler):
         )
 
     def do_POST(self):
+
+        # ADMIN LOGIN
+        if self.path == "/api/admin/login":
+
+            try:
+
+                content_length = int(
+                    self.headers.get(
+                        "Content-Length",
+                        "0"
+                    )
+                )
+
+                raw_body = self.rfile.read(
+                    content_length
+                )
+
+                data = json.loads(
+                    raw_body.decode("utf-8")
+                )
+
+                password = data.get(
+                    "password",
+                    ""
+                )
+
+                if not ADMIN_PASSWORD:
+                    self.send_json(
+                        500,
+                        {
+                            "error": "Admin password is not configured"
+                        }
+                    )
+
+                    return
+
+                if not secrets.compare_digest(
+                    password,
+                    ADMIN_PASSWORD
+                ):
+
+                    self.send_json(
+                        401,
+                        {
+                            "error": "Incorrect password"
+                        }
+                    )
+
+                    return
+
+                token = secrets.token_urlsafe(32)
+
+                ADMIN_SESSIONS.add(token)
+
+                self.send_json(
+                    200,
+                    {
+                        "authenticated": True,
+                        "token": token
+                    }
+                )
+
+            except json.JSONDecodeError:
+
+                self.send_json(
+                    400,
+                    {
+                        "error": "Invalid JSON"
+                    }
+                )
+
+            return
+
+        # ADMIN LOGOUT
+        if self.path == "/api/admin/logout":
+
+            token = self.get_auth_token()
+
+            if token:
+                ADMIN_SESSIONS.discard(token)
+
+            self.send_json(
+                200,
+                {
+                    "success": True
+                }
+            )
+
+            return
+
+        # PUBLIC FORM SUBMISSION
         if self.path != "/api/submissions":
+
             self.send_json(
                 404,
                 {
                     "error": "Not found"
                 }
             )
+
             return
 
         try:
+
             content_length = int(
                 self.headers.get(
                     "Content-Length",
@@ -231,6 +396,7 @@ class Handler(BaseHTTPRequestHandler):
             )
 
         except json.JSONDecodeError:
+
             self.send_json(
                 400,
                 {
@@ -239,6 +405,7 @@ class Handler(BaseHTTPRequestHandler):
             )
 
         except Exception as error:
+
             print(
                 f"POST submissions error: {error}",
                 flush=True
@@ -252,16 +419,23 @@ class Handler(BaseHTTPRequestHandler):
             )
 
     def do_DELETE(self):
+
         if self.path != "/api/submissions":
+
             self.send_json(
                 404,
                 {
                     "error": "Not found"
                 }
             )
+
+            return
+
+        if not self.require_admin():
             return
 
         try:
+
             supabase_request(
                 "DELETE",
                 f"{TABLE_URL}?id=not.is.null"
@@ -275,6 +449,7 @@ class Handler(BaseHTTPRequestHandler):
             )
 
         except Exception as error:
+
             print(
                 f"DELETE submissions error: {error}",
                 flush=True
@@ -288,15 +463,19 @@ class Handler(BaseHTTPRequestHandler):
             )
 
     def do_HEAD(self):
+
         self.send_response(200)
+
         self.send_header(
             "Access-Control-Allow-Origin",
             "*"
         )
+
         self.end_headers()
 
 
 if __name__ == "__main__":
+
     server = ThreadingHTTPServer(
         (HOST, PORT),
         Handler
