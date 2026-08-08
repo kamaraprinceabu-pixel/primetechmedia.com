@@ -312,12 +312,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     if (adminToolbarText) {
       adminToolbarText.textContent = `Manage ${sectionLabels[name].toLowerCase()} and review all related activity.`;
-  if (name === 'contact-forms' || name === 'bookings') {
-    loadAdminSubmissions(
-        name === 'bookings'
-            ? 'booking'
-            : (submissionFilter?.value || 'all')
-    );
+if (name === 'contact-forms') {
+    loadAdminSubmissions(submissionFilter?.value || 'all');
 }
   }
 
