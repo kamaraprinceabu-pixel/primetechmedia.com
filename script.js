@@ -12,7 +12,7 @@ document.addEventListener('DOMContentLoaded', () => {
     window.emailjs.init(emailPublicKey);
   }
 
-  const apiBaseUrl = 'http://127.0.0.1:8001';
+  const apiBaseUrl = 'https://primetechmedia-com.onrender.com';
 
   function getApiBaseUrl() {
     return apiBaseUrl;
@@ -75,7 +75,7 @@ document.addEventListener('DOMContentLoaded', () => {
       form.reset();
     } catch (error) {
       console.error('Submission failed:', error);
-      alert('Unable to save your submission right now. Please make sure the backend server is running at http://127.0.0.1:8001 and try again.');
+      alert('Unable to save your submission right now. Please make sure the backend server is running at https://primetechmedia-com.onrender.com and try again.');
     }
   }
 
