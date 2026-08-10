@@ -1,8 +1,11 @@
+import base64
+import hashlib
+import hmac
 import json
 import os
 import secrets
-import urllib.request
 import urllib.error
+import urllib.request
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -11,14 +14,10 @@ PORT = int(os.environ.get("PORT", "8001"))
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "").rstrip("/")
 SUPABASE_SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_KEY", "")
-
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "")
+ADMIN_SECRET = os.environ.get("ADMIN_SECRET", "")
 
 TABLE_URL = f"{SUPABASE_URL}/rest/v1/submissions"
-
-# Temporary in-memory admin sessions.
-# Sessions are cleared whenever the Render server restarts.
-ADMIN_SESSIONS = set()
 
 
 def supabase_request(method, url, data=None):
@@ -57,7 +56,6 @@ def supabase_request(method, url, data=None):
             request,
             timeout=30
         ) as response:
-
             response_body = response.read().decode("utf-8")
 
             if not response_body:
@@ -93,6 +91,106 @@ def convert_submission(data):
         "created_at": data.get("createdAt")
         or datetime.now(timezone.utc).isoformat()
     }
+
+
+def get_secret():
+    if ADMIN_SECRET:
+        return ADMIN_SECRET
+
+    if ADMIN_PASSWORD:
+        return hashlib.sha256(
+            ADMIN_PASSWORD.encode("utf-8")
+        ).hexdigest()
+
+    return ""
+
+
+def create_admin_token():
+    secret = get_secret()
+
+    if not secret:
+        raise RuntimeError(
+            "ADMIN_SECRET or ADMIN_PASSWORD must be configured"
+        )
+
+    timestamp = str(
+        int(datetime.now(timezone.utc).timestamp())
+    )
+
+    nonce = secrets.token_urlsafe(24)
+
+    payload = f"{timestamp}.{nonce}"
+
+    signature = hmac.new(
+        secret.encode("utf-8"),
+        payload.encode("utf-8"),
+        hashlib.sha256
+    ).hexdigest()
+
+    token_data = f"{payload}.{signature}"
+
+    return base64.urlsafe_b64encode(
+        token_data.encode("utf-8")
+    ).decode("utf-8").rstrip("=")
+
+
+def verify_admin_token(token):
+    if not token:
+        return False
+
+    secret = get_secret()
+
+    if not secret:
+        return False
+
+    try:
+        padding = "=" * (
+            4 - len(token) % 4
+        )
+
+        decoded = base64.urlsafe_b64decode(
+            token + padding
+        ).decode("utf-8")
+
+        parts = decoded.split(".")
+
+        if len(parts) != 3:
+            return False
+
+        timestamp, nonce, signature = parts
+
+        payload = f"{timestamp}.{nonce}"
+
+        expected_signature = hmac.new(
+            secret.encode("utf-8"),
+            payload.encode("utf-8"),
+            hashlib.sha256
+        ).hexdigest()
+
+        if not hmac.compare_digest(
+            signature,
+            expected_signature
+        ):
+            return False
+
+        token_time = int(timestamp)
+
+        current_time = int(
+            datetime.now(timezone.utc).timestamp()
+        )
+
+        max_age = 60 * 60 * 24
+
+        if current_time - token_time > max_age:
+            return False
+
+        if token_time > current_time + 60:
+            return False
+
+        return True
+
+    except Exception:
+        return False
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -157,7 +255,9 @@ class Handler(BaseHTTPRequestHandler):
             ""
         )
 
-        if not authorization.startswith("Bearer "):
+        if not authorization.startswith(
+            "Bearer "
+        ):
             return None
 
         return authorization[7:].strip()
@@ -165,7 +265,7 @@ class Handler(BaseHTTPRequestHandler):
     def require_admin(self):
         token = self.get_auth_token()
 
-        if not token or token not in ADMIN_SESSIONS:
+        if not verify_admin_token(token):
             self.send_json(
                 401,
                 {
@@ -200,13 +300,12 @@ class Handler(BaseHTTPRequestHandler):
 
             return
 
-        if self.path.startswith("/api/submissions"):
+        if self.path == "/api/submissions":
 
             if not self.require_admin():
                 return
 
             try:
-
                 submissions = supabase_request(
                     "GET",
                     f"{TABLE_URL}?select=*&order=created_at.desc"
@@ -215,7 +314,6 @@ class Handler(BaseHTTPRequestHandler):
                 formatted = []
 
                 for submission in submissions:
-
                     item = dict(submission)
 
                     item["createdAt"] = item.get(
@@ -254,11 +352,9 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
 
-        # ADMIN LOGIN
         if self.path == "/api/admin/login":
 
             try:
-
                 content_length = int(
                     self.headers.get(
                         "Content-Length",
@@ -293,7 +389,6 @@ class Handler(BaseHTTPRequestHandler):
                     password,
                     ADMIN_PASSWORD
                 ):
-
                     self.send_json(
                         401,
                         {
@@ -303,9 +398,7 @@ class Handler(BaseHTTPRequestHandler):
 
                     return
 
-                token = secrets.token_urlsafe(32)
-
-                ADMIN_SESSIONS.add(token)
+                token = create_admin_token()
 
                 self.send_json(
                     200,
@@ -324,15 +417,23 @@ class Handler(BaseHTTPRequestHandler):
                     }
                 )
 
+            except Exception as error:
+
+                print(
+                    f"Admin login error: {error}",
+                    flush=True
+                )
+
+                self.send_json(
+                    500,
+                    {
+                        "error": "Unable to create admin session"
+                    }
+                )
+
             return
 
-        # ADMIN LOGOUT
         if self.path == "/api/admin/logout":
-
-            token = self.get_auth_token()
-
-            if token:
-                ADMIN_SESSIONS.discard(token)
 
             self.send_json(
                 200,
@@ -343,7 +444,6 @@ class Handler(BaseHTTPRequestHandler):
 
             return
 
-        # PUBLIC FORM SUBMISSION
         if self.path != "/api/submissions":
 
             self.send_json(
@@ -372,7 +472,9 @@ class Handler(BaseHTTPRequestHandler):
                 raw_body.decode("utf-8")
             )
 
-            submission = convert_submission(data)
+            submission = convert_submission(
+                data
+            )
 
             result = supabase_request(
                 "POST",
@@ -380,7 +482,10 @@ class Handler(BaseHTTPRequestHandler):
                 submission
             )
 
-            if isinstance(result, list) and result:
+            if (
+                isinstance(result, list)
+                and result
+            ):
                 saved = result[0]
             else:
                 saved = submission
