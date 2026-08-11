@@ -310,7 +310,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 handleFormSubmit(
                     bookingForm,
                     'booking',
-                    'Booking request received. Our team will contact you shortly.'
+                    'Booking request received. Our team will contact you shortly. And thank you for Choosing Prime Tech Media.'
                 );
             }
         );
