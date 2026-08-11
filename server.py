@@ -337,7 +337,8 @@ def send_email_reply(recipient, subject, message):
         data=payload,
         headers={
             "Authorization": f"Bearer {RESEND_API_KEY}",
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
+            "User-Agent": "PrimeTech-Media/1.0"
         },
         method="POST"
     )
