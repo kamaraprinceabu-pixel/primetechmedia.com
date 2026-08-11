@@ -5,9 +5,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     let adminToken = sessionStorage.getItem('adminToken') || '';
 
-    function get(id) {
-        return document.getElementById(id);
-    }
+    const $ = (id) => document.getElementById(id);
 
     function escapeHtml(value) {
         return String(value ?? '')
@@ -18,6 +16,17 @@ document.addEventListener('DOMContentLoaded', function () {
             .replace(/'/g, '&#039;');
     }
 
+    function normalizeType(item) {
+    return String(
+        item?.type ||
+        item?.submissionType ||
+        item?.category ||
+        ''
+    )
+        .trim()
+        .toLowerCase();
+}
+
     function formatDate(value) {
         if (!value) {
             return '—';
@@ -25,32 +34,61 @@ document.addEventListener('DOMContentLoaded', function () {
 
         const date = new Date(value);
 
-        if (isNaN(date.getTime())) {
-            return escapeHtml(value);
+        if (Number.isNaN(date.getTime())) {
+            return String(value);
         }
 
         return date.toLocaleString();
     }
 
-    function normalizeType(item) {
-        return String(item?.type || '')
-            .trim()
-            .toLowerCase();
-    }
-
     function getHeaders() {
         return {
             'Content-Type': 'application/json',
-            'Authorization': 'Bearer ' + adminToken
+            'Authorization': `Bearer ${adminToken}`
         };
     }
 
-    async function apiRequest(url, options = {}) {
+    function showLogin() {
+        const loginCard = $('adminLoginCard');
+        const dashboard = $('adminDashboard');
+
+        if (loginCard) {
+            loginCard.classList.remove('d-none');
+        }
+
+        if (dashboard) {
+            dashboard.classList.add('d-none');
+        }
+    }
+
+    function showDashboard() {
+        const loginCard = $('adminLoginCard');
+        const dashboard = $('adminDashboard');
+
+        if (loginCard) {
+            loginCard.classList.add('d-none');
+        }
+
+        if (dashboard) {
+            dashboard.classList.remove('d-none');
+        }
+    }
+
+    function clearLogin() {
+        adminToken = '';
+
+        sessionStorage.removeItem('adminToken');
+        sessionStorage.removeItem('adminAuthenticated');
+
+        showLogin();
+    }
+
+    async function apiFetch(url, options = {}) {
         const controller = new AbortController();
 
-        const timeout = setTimeout(function () {
+        const timeout = setTimeout(() => {
             controller.abort();
-        }, 30000);
+        }, 20000);
 
         try {
             const response = await fetch(url, {
@@ -61,62 +99,24 @@ document.addEventListener('DOMContentLoaded', function () {
             clearTimeout(timeout);
 
             return response;
-
         } catch (error) {
             clearTimeout(timeout);
 
             if (error.name === 'AbortError') {
-                throw new Error(
-                    'The server took too long to respond. Please try again.'
-                );
+                throw new Error('Server request timed out.');
             }
 
             throw error;
         }
     }
 
-    function showLogin() {
-        const login = get('adminLoginCard');
-        const dashboard = get('adminDashboard');
-
-        if (login) {
-            login.classList.remove('d-none');
-        }
-
-        if (dashboard) {
-            dashboard.classList.add('d-none');
-        }
-    }
-
-    function showDashboard() {
-        const login = get('adminLoginCard');
-        const dashboard = get('adminDashboard');
-
-        if (login) {
-            login.classList.add('d-none');
-        }
-
-        if (dashboard) {
-            dashboard.classList.remove('d-none');
-        }
-    }
-
-    function logout() {
-        adminToken = '';
-
-        sessionStorage.removeItem('adminToken');
-        sessionStorage.removeItem('adminAuthenticated');
-
-        showLogin();
-    }
-
     async function getSubmissions() {
         if (!adminToken) {
-            throw new Error('You are not logged in.');
+            throw new Error('Admin authentication required.');
         }
 
-        const response = await apiRequest(
-            API_URL + '/api/submissions',
+        const response = await apiFetch(
+            `${API_URL}/api/submissions`,
             {
                 method: 'GET',
                 headers: getHeaders()
@@ -124,93 +124,120 @@ document.addEventListener('DOMContentLoaded', function () {
         );
 
         if (response.status === 401) {
-            logout();
-
+            clearLogin();
             throw new Error(
-                'Your admin session has expired. Please log in again.'
+                'Admin session expired. Please log in again.'
             );
         }
 
         if (!response.ok) {
             throw new Error(
-                'Server error: HTTP ' + response.status
+                `Unable to load submissions. HTTP ${response.status}`
             );
         }
 
         const data = await response.json();
 
         if (!Array.isArray(data)) {
+            console.error('Invalid API response:', data);
             throw new Error(
-                'The server returned invalid submission data.'
+                'Server returned an invalid submissions response.'
             );
         }
 
         return data;
     }
 
-    function setMetric(id, value) {
-        const element = get(id);
+    async function updateMetrics() {
+        const leadsElement = $('totalLeadsMetric');
+        const bookingsElement = $('totalBookingsMetric');
+        const contactsElement = $('totalContactsMetric');
+        const projectsElement = $('totalProjectsMetric');
 
-        if (element) {
-            element.textContent = value;
+        if (leadsElement) {
+            leadsElement.textContent = '...';
         }
-    }
 
-    async function updateDashboard() {
-        setMetric('totalLeadsMetric', '...');
-        setMetric('totalBookingsMetric', '...');
-        setMetric('totalContactsMetric', '...');
-        setMetric('totalProjectsMetric', '0');
+        if (bookingsElement) {
+            bookingsElement.textContent = '...';
+        }
+
+        if (contactsElement) {
+            contactsElement.textContent = '...';
+        }
+
+        if (projectsElement) {
+            projectsElement.textContent = '0';
+        }
 
         try {
             const submissions = await getSubmissions();
 
-            const bookings = submissions.filter(function (item) {
-                return normalizeType(item) === 'booking';
+            const bookings = submissions.filter(
+                item => normalizeType(item) === 'booking'
+            );
+
+            const contacts = submissions.filter(
+                item => normalizeType(item) === 'contact'
+            );
+
+            if (leadsElement) {
+                leadsElement.textContent = submissions.length;
+            }
+
+            if (bookingsElement) {
+                bookingsElement.textContent = bookings.length;
+            }
+
+            if (contactsElement) {
+                contactsElement.textContent = contacts.length;
+            }
+
+            if (projectsElement) {
+                projectsElement.textContent = '0';
+            }
+
+            console.log('Dashboard metrics updated:', {
+                leads: submissions.length,
+                bookings: bookings.length,
+                contacts: contacts.length
             });
-
-            const contacts = submissions.filter(function (item) {
-                return normalizeType(item) === 'contact';
-            });
-
-            setMetric(
-                'totalLeadsMetric',
-                submissions.length
-            );
-
-            setMetric(
-                'totalBookingsMetric',
-                bookings.length
-            );
-
-            setMetric(
-                'totalContactsMetric',
-                contacts.length
-            );
 
         } catch (error) {
             console.error(
-                'Dashboard loading error:',
+                'Metrics error:',
                 error
             );
 
-            setMetric('totalLeadsMetric', '0');
-            setMetric('totalBookingsMetric', '0');
-            setMetric('totalContactsMetric', '0');
+            if (leadsElement) {
+                leadsElement.textContent = '0';
+            }
+
+            if (bookingsElement) {
+                bookingsElement.textContent = '0';
+            }
+
+            if (contactsElement) {
+                contactsElement.textContent = '0';
+            }
+
+            if (projectsElement) {
+                projectsElement.textContent = '0';
+            }
         }
     }
 
     function renderBookings(bookings) {
-        const tbody = get('bookingsTableBody');
+        const tbody = $('bookingsTableBody');
 
         if (!tbody) {
             console.error(
-                'Missing element: bookingsTableBody'
+                'bookingsTableBody does not exist.'
             );
             return;
         }
 
-        if (bookings.length === 0) {
+        if (!bookings.length) {
             tbody.innerHTML = `
                 <tr>
                     <td colspan="8" class="text-center">
@@ -222,6 +249,15 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         tbody.innerHTML = bookings.map(function (booking) {
+
+            const name =
+                booking.name ||
+                booking.customerName ||
+                '—';
+
+            const company =
+                booking.company ||
+                '—';
 
             const service =
                 booking.service ||
@@ -238,6 +274,18 @@ document.addEventListener('DOMContentLoaded', function () {
                 booking.preferredTime ||
                 '—';
 
+            const budget =
+                booking.budget ||
+                '—';
+
+            const email =
+                booking.email ||
+                '—';
+
+            const phone =
+                booking.phone ||
+                '—';
+
             const message =
                 booking.message ||
                 booking.projectDescription ||
@@ -249,17 +297,11 @@ document.addEventListener('DOMContentLoaded', function () {
 
                     <td>
                         <strong>
-                            ${escapeHtml(
-                                booking.name || '—'
-                            )}
+                            ${escapeHtml(name)}
                         </strong>
-
                         <br>
-
                         <small class="text-muted">
-                            ${escapeHtml(
-                                booking.company || '—'
-                            )}
+                            ${escapeHtml(company)}
                         </small>
                     </td>
 
@@ -276,24 +318,16 @@ document.addEventListener('DOMContentLoaded', function () {
                     </td>
 
                     <td>
-                        ${escapeHtml(
-                            booking.budget || '—'
-                        )}
+                        ${escapeHtml(budget)}
                     </td>
 
                     <td>
                         <strong>
-                            ${escapeHtml(
-                                booking.email || '—'
-                            )}
+                            ${escapeHtml(email)}
                         </strong>
-
                         <br>
-
                         <small>
-                            ${escapeHtml(
-                                booking.phone || '—'
-                            )}
+                            ${escapeHtml(phone)}
                         </small>
                     </td>
 
@@ -307,22 +341,20 @@ document.addEventListener('DOMContentLoaded', function () {
                             type="button"
                             class="admin-action-btn"
                             data-action="reply"
-                            data-id="${escapeHtml(
-                                booking.id || ''
-                            )}"
+                            data-id="${escapeHtml(booking.id || '')}"
+                            title="Reply"
                         >
-                            Reply
+                            <i class="fa-solid fa-reply"></i>
                         </button>
 
                         <button
                             type="button"
                             class="admin-action-btn"
                             data-action="note"
-                            data-id="${escapeHtml(
-                                booking.id || ''
-                            )}"
+                            data-id="${escapeHtml(booking.id || '')}"
+                            title="Note"
                         >
-                            Note
+                            <i class="fa-solid fa-note-sticky"></i>
                         </button>
 
                     </td>
@@ -333,17 +365,16 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function renderContacts(contacts) {
-        const tbody =
-            get('contactSubmissionsTableBody');
+        const tbody = $('contactSubmissionsTableBody');
 
         if (!tbody) {
             console.error(
-                'Missing element: contactSubmissionsTableBody'
+                'contactSubmissionsTableBody does not exist.'
             );
             return;
         }
 
-        if (contacts.length === 0) {
+        if (!contacts.length) {
             tbody.innerHTML = `
                 <tr>
                     <td colspan="7" class="text-center">
@@ -356,47 +387,58 @@ document.addEventListener('DOMContentLoaded', function () {
 
         tbody.innerHTML = contacts.map(function (contact) {
 
+            const name =
+                contact.name ||
+                contact.customerName ||
+                '—';
+
+            const email =
+                contact.email ||
+                '—';
+
+            const phone =
+                contact.phone ||
+                '—';
+
+            const subject =
+                contact.subject ||
+                'Website Enquiry';
+
+            const message =
+                contact.message ||
+                '—';
+
+            const date =
+                contact.createdAt ||
+                contact.created_at;
+
             return `
                 <tr>
 
                     <td>
                         <strong>
-                            ${escapeHtml(
-                                contact.name || '—'
-                            )}
+                            ${escapeHtml(name)}
                         </strong>
                     </td>
 
                     <td>
-                        ${escapeHtml(
-                            contact.email || '—'
-                        )}
+                        ${escapeHtml(email)}
                     </td>
 
                     <td>
-                        ${escapeHtml(
-                            contact.phone || '—'
-                        )}
+                        ${escapeHtml(phone)}
                     </td>
 
                     <td>
-                        ${escapeHtml(
-                            contact.subject ||
-                            'Website Enquiry'
-                        )}
+                        ${escapeHtml(subject)}
                     </td>
 
                     <td>
-                        ${escapeHtml(
-                            contact.message || '—'
-                        )}
+                        ${escapeHtml(message)}
                     </td>
 
                     <td>
-                        ${formatDate(
-                            contact.createdAt ||
-                            contact.created_at
-                        )}
+                        ${escapeHtml(formatDate(date))}
                     </td>
 
                     <td>
@@ -405,22 +447,20 @@ document.addEventListener('DOMContentLoaded', function () {
                             type="button"
                             class="admin-action-btn"
                             data-action="reply"
-                            data-id="${escapeHtml(
-                                contact.id || ''
-                            )}"
+                            data-id="${escapeHtml(contact.id || '')}"
+                            title="Reply"
                         >
-                            Reply
+                            <i class="fa-solid fa-reply"></i>
                         </button>
 
                         <button
                             type="button"
                             class="admin-action-btn"
                             data-action="note"
-                            data-id="${escapeHtml(
-                                contact.id || ''
-                            )}"
+                            data-id="${escapeHtml(contact.id || '')}"
+                            title="Note"
                         >
-                            Note
+                            <i class="fa-solid fa-note-sticky"></i>
                         </button>
 
                     </td>
@@ -431,11 +471,11 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function renderClients(submissions) {
-        const tbody = get('clientsTableBody');
+        const tbody = $('clientsTableBody');
 
         if (!tbody) {
             console.error(
-                'Missing element: clientsTableBody'
+                'clientsTableBody does not exist.'
             );
             return;
         }
@@ -454,14 +494,18 @@ document.addEventListener('DOMContentLoaded', function () {
             }
 
             const email = String(
-                submission.email || ''
-            )
-            .trim()
-            .toLowerCase();
+    submission.email ||
+    submission.phone ||
+    submission.name ||
+    submission.customerName ||
+    ''
+)
+    .trim()
+    .toLowerCase();
 
-            if (!email) {
-                return;
-            }
+if (!email) {
+    return;
+}
 
             const activity =
                 submission.createdAt ||
@@ -472,84 +516,88 @@ document.addEventListener('DOMContentLoaded', function () {
 
                 clients[email] = {
                     name:
-                        submission.name || '—',
+                        submission.name ||
+                        submission.customerName ||
+                        '—',
 
                     company:
-                        submission.company || '—',
+                        submission.company ||
+                        '—',
 
-                    email:
-                        email,
+                    email: email,
 
                     phone:
-                        submission.phone || '—',
+                        submission.phone ||
+                        '—',
 
                     service:
                         submission.service ||
                         submission.serviceCategory ||
                         '—',
 
-                    lastActivity:
-                        activity
+                    submissions: 1,
+
+                    lastActivity: activity
                 };
 
-            } else {
+                return;
+            }
 
-                if (
-                    activity &&
-                    (
-                        !clients[email].lastActivity ||
-                        new Date(activity) >
-                        new Date(
-                            clients[email].lastActivity
-                        )
-                    )
-                ) {
-                    clients[email].lastActivity =
-                        activity;
-                }
+            const client = clients[email];
 
-                if (
-                    clients[email].name === '—' &&
-                    submission.name
-                ) {
-                    clients[email].name =
-                        submission.name;
-                }
+            client.submissions += 1;
 
-                if (
-                    clients[email].company === '—' &&
-                    submission.company
-                ) {
-                    clients[email].company =
-                        submission.company;
-                }
+            if (
+                activity &&
+                (
+                    !client.lastActivity ||
+                    new Date(activity) >
+                    new Date(client.lastActivity)
+                )
+            ) {
+                client.lastActivity = activity;
+            }
 
-                if (
-                    clients[email].phone === '—' &&
-                    submission.phone
-                ) {
-                    clients[email].phone =
-                        submission.phone;
-                }
+            if (
+                client.name === '—' &&
+                submission.name
+            ) {
+                client.name = submission.name;
+            }
 
-                if (
-                    clients[email].service === '—' &&
-                    (
-                        submission.service ||
-                        submission.serviceCategory
-                    )
-                ) {
-                    clients[email].service =
-                        submission.service ||
-                        submission.serviceCategory;
-                }
+            if (
+                client.company === '—' &&
+                submission.company
+            ) {
+                client.company =
+                    submission.company;
+            }
+
+            if (
+                client.phone === '—' &&
+                submission.phone
+            ) {
+                client.phone =
+                    submission.phone;
+            }
+
+            if (
+                client.service === '—' &&
+                (
+                    submission.service ||
+                    submission.serviceCategory
+                )
+            ) {
+                client.service =
+                    submission.service ||
+                    submission.serviceCategory;
             }
         });
 
-        const list =
+        const clientList =
             Object.values(clients);
 
-        if (list.length === 0) {
+        if (!clientList.length) {
             tbody.innerHTML = `
                 <tr>
                     <td colspan="6" class="text-center">
@@ -560,69 +608,58 @@ document.addEventListener('DOMContentLoaded', function () {
             return;
         }
 
-        list.sort(function (a, b) {
-
+        clientList.sort(function (a, b) {
             return (
-                new Date(
-                    b.lastActivity || 0
-                ) -
-                new Date(
-                    a.lastActivity || 0
-                )
+                new Date(b.lastActivity || 0) -
+                new Date(a.lastActivity || 0)
             );
-
         });
 
-        tbody.innerHTML = list.map(function (client) {
+        tbody.innerHTML = clientList.map(
+            function (client) {
 
-            return `
-                <tr>
+                return `
+                    <tr>
 
-                    <td>
-                        ${escapeHtml(
-                            client.name
-                        )}
-                    </td>
+                        <td>
+                            <strong>
+                                ${escapeHtml(client.name)}
+                            </strong>
+                        </td>
 
-                    <td>
-                        ${escapeHtml(
-                            client.company
-                        )}
-                    </td>
+                        <td>
+                            ${escapeHtml(client.company)}
+                        </td>
 
-                    <td>
-                        ${escapeHtml(
-                            client.email
-                        )}
-                    </td>
+                        <td>
+                            ${escapeHtml(client.email)}
+                        </td>
 
-                    <td>
-                        ${escapeHtml(
-                            client.phone
-                        )}
-                    </td>
+                        <td>
+                            ${escapeHtml(client.phone)}
+                        </td>
 
-                    <td>
-                        ${escapeHtml(
-                            client.service
-                        )}
-                    </td>
+                        <td>
+                            ${escapeHtml(client.service)}
+                        </td>
 
-                    <td>
-                        ${formatDate(
-                            client.lastActivity
-                        )}
-                    </td>
+                        <td>
+                            ${escapeHtml(
+                                formatDate(
+                                    client.lastActivity
+                                )
+                            )}
+                        </td>
 
-                </tr>
-            `;
-
-        }).join('');
+                    </tr>
+                `;
+            }
+        ).join('');
     }
 
-    function renderProjects() {
+    function loadProjects() {
         const container =
-            get('projectsContainer');
+            $('projectsContainer');
 
         if (!container) {
             return;
@@ -630,239 +667,225 @@ document.addEventListener('DOMContentLoaded', function () {
 
         container.innerHTML = `
             <div class="col-12">
-
                 <div class="text-center p-4">
-
                     <p class="text-muted mb-0">
                         No projects added yet.
                     </p>
-
                 </div>
-
             </div>
         `;
     }
 
     async function loadBookings() {
-        const tbody =
-            get('bookingsTableBody');
+    const tbody = $('bookingsTableBody');
 
-        if (!tbody) {
-            return;
-        }
+    if (!tbody) {
+        console.error('bookingsTableBody does not exist.');
+        return;
+    }
+
+    tbody.innerHTML = `
+        <tr>
+            <td colspan="8" class="text-center">
+                Loading bookings...
+            </td>
+        </tr>
+    `;
+
+    try {
+        const submissions = await getSubmissions();
+
+        console.log('ALL SUBMISSIONS:', submissions);
+
+        const bookings = submissions.filter(function (item) {
+            const type = normalizeType(item);
+
+            return (
+                type === 'booking' ||
+                type === 'bookings' ||
+                type === 'booking_request' ||
+                type === 'booking-request'
+            );
+        });
+
+        console.log('BOOKINGS FOUND:', bookings);
+
+        renderBookings(bookings);
+
+    } catch (error) {
+
+        console.error('Bookings error:', error);
 
         tbody.innerHTML = `
             <tr>
-                <td colspan="8" class="text-center">
-                    Loading bookings...
+                <td colspan="8" class="text-center text-danger">
+                    ${escapeHtml(error.message)}
                 </td>
             </tr>
         `;
-
-        try {
-
-            const submissions =
-                await getSubmissions();
-
-            const bookings =
-                submissions.filter(function (item) {
-                    return normalizeType(item) === 'booking';
-                });
-
-            renderBookings(bookings);
-
-        } catch (error) {
-
-            console.error(
-                'Bookings loading error:',
-                error
-            );
-
-            tbody.innerHTML = `
-                <tr>
-                    <td
-                        colspan="8"
-                        class="text-center text-danger"
-                    >
-                        ${escapeHtml(
-                            error.message ||
-                            'Unable to load bookings.'
-                        )}
-                    </td>
-                </tr>
-            `;
-        }
-    }
-
-    async function loadClients() {
-        const tbody =
-            get('clientsTableBody');
-
-        if (!tbody) {
-            return;
-        }
-
-        tbody.innerHTML = `
-            <tr>
-                <td colspan="6" class="text-center">
-                    Loading clients...
-                </td>
-            </tr>
-        `;
-
-        try {
-
-            const submissions =
-                await getSubmissions();
-
-            renderClients(submissions);
-
-        } catch (error) {
-
-            console.error(
-                'Clients loading error:',
-                error
-            );
-
-            tbody.innerHTML = `
-                <tr>
-                    <td
-                        colspan="6"
-                        class="text-center text-danger"
-                    >
-                        ${escapeHtml(
-                            error.message ||
-                            'Unable to load clients.'
-                        )}
-                    </td>
-                </tr>
-            `;
-        }
-    }
-
-    async function loadContacts() {
-        const tbody =
-            get('contactSubmissionsTableBody');
-
-        if (!tbody) {
-            return;
-        }
-
-        tbody.innerHTML = `
-            <tr>
-                <td colspan="7" class="text-center">
-                    Loading messages...
-                </td>
-            </tr>
-        `;
-
-        try {
-
-            const submissions =
-                await getSubmissions();
-
-            const contacts =
-                submissions.filter(function (item) {
-                    return normalizeType(item) === 'contact';
-                });
-
-            renderContacts(contacts);
-
-        } catch (error) {
-
-            console.error(
-                'Contacts loading error:',
-                error
-            );
-
-            tbody.innerHTML = `
-                <tr>
-                    <td
-                        colspan="7"
-                        class="text-center text-danger"
-                    >
-                        ${escapeHtml(
-                            error.message ||
-                            'Unable to load contact messages.'
-                        )}
-                    </td>
-                </tr>
-            `;
-        }
-    }
-
-    function showSection(sectionName) {
-    const sections = document.querySelectorAll('.admin-section');
-    const navItems = document.querySelectorAll('.admin-nav-item');
-
-    sections.forEach(function (section) {
-        const currentSection = section.getAttribute('data-section');
-
-        if (currentSection === sectionName) {
-            section.classList.remove('d-none');
-            section.classList.add('admin-section--active');
-        } else {
-            section.classList.add('d-none');
-            section.classList.remove('admin-section--active');
-        }
-    });
-
-    navItems.forEach(function (item) {
-        const currentSection = item.getAttribute('data-section');
-
-        item.classList.toggle(
-            'active',
-            currentSection === sectionName
-        );
-    });
-
-    if (sectionName === 'bookings') {
-        if (typeof loadBookings === 'function') {
-            loadBookings();
-        }
-    }
-
-    if (sectionName === 'clients') {
-        if (typeof loadClients === 'function') {
-            loadClients();
-        }
-    }
-
-    if (sectionName === 'projects') {
-        if (typeof loadProjects === 'function') {
-            loadProjects();
-        }
-    }
-
-    if (sectionName === 'contact-forms') {
-        if (typeof loadContacts === 'function') {
-            loadContacts();
-        }
     }
 }
 
+    async function loadContacts() {
+    const tbody = $('contactSubmissionsTableBody');
 
-const adminNavItems = document.querySelectorAll('.admin-nav-item');
+    if (!tbody) {
+        console.error(
+            'contactSubmissionsTableBody does not exist.'
+        );
+        return;
+    }
 
-adminNavItems.forEach(function (item) {
-    item.addEventListener('click', function (event) {
-        event.preventDefault();
+    tbody.innerHTML = `
+        <tr>
+            <td colspan="7" class="text-center">
+                Loading messages...
+            </td>
+        </tr>
+    `;
 
-        const sectionName = this.getAttribute('data-section');
+    try {
+        const submissions = await getSubmissions();
 
-        if (!sectionName) {
-            return;
+        console.log('ALL SUBMISSIONS:', submissions);
+
+        const contacts = submissions.filter(function (item) {
+            const type = normalizeType(item);
+
+            return (
+                type === 'contact' ||
+                type === 'contacts' ||
+                type === 'contact_form' ||
+                type === 'contact-form' ||
+                type === 'message'
+            );
+        });
+
+        console.log('CONTACTS FOUND:', contacts);
+
+        renderContacts(contacts);
+
+    } catch (error) {
+
+        console.error('Contacts error:', error);
+
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="7" class="text-center text-danger">
+                    ${escapeHtml(error.message)}
+                </td>
+            </tr>
+        `;
+    }
+}
+
+    async function loadClients() {
+    const tbody = $('clientsTableBody');
+
+    if (!tbody) {
+        console.error(
+            'clientsTableBody does not exist.'
+        );
+        return;
+    }
+
+    tbody.innerHTML = `
+        <tr>
+            <td colspan="6" class="text-center">
+                Loading clients...
+            </td>
+        </tr>
+    `;
+
+    try {
+        const submissions = await getSubmissions();
+
+        console.log('CLIENT SOURCE DATA:', submissions);
+
+        renderClients(submissions);
+
+    } catch (error) {
+
+        console.error('Clients error:', error);
+
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="6" class="text-center text-danger">
+                    ${escapeHtml(error.message)}
+                </td>
+            </tr>
+        `;
+    }
+}
+    function showSection(sectionName) {
+
+        console.log(
+            'Opening admin section:',
+            sectionName
+        );
+
+        const sections =
+            document.querySelectorAll(
+                '.admin-section'
+            );
+
+        const navItems =
+            document.querySelectorAll(
+                '.admin-nav-item'
+            );
+
+        sections.forEach(function (section) {
+
+            const active =
+                section.dataset.section ===
+                sectionName;
+
+            section.classList.toggle(
+                'd-none',
+                !active
+            );
+
+            section.classList.toggle(
+                'admin-section--active',
+                active
+            );
+        });
+
+        navItems.forEach(function (item) {
+
+            item.classList.toggle(
+                'active',
+                item.dataset.section ===
+                sectionName
+            );
+        });
+
+        if (sectionName === 'dashboard') {
+            updateMetrics();
         }
 
-        showSection(sectionName);
-    });
-});
+        if (sectionName === 'bookings') {
+            loadBookings();
+        }
+
+        if (sectionName === 'clients') {
+            loadClients();
+        }
+
+        if (sectionName === 'projects') {
+            loadProjects();
+        }
+
+        if (sectionName === 'contact-forms') {
+            loadContacts();
+        }
+    }
 
     async function login(password) {
 
         const response =
-            await apiRequest(
-                API_URL + '/api/admin/login',
+            await apiFetch(
+                `${API_URL}/api/admin/login`,
                 {
                     method: 'POST',
 
@@ -880,19 +903,14 @@ adminNavItems.forEach(function (item) {
         let data = {};
 
         try {
-
-            data =
-                await response.json();
-
+            data = await response.json();
         } catch (error) {
-
             throw new Error(
-                'The server returned an invalid login response.'
+                'Invalid response from login server.'
             );
         }
 
         if (!response.ok) {
-
             throw new Error(
                 data.error ||
                 'Incorrect admin password.'
@@ -900,7 +918,6 @@ adminNavItems.forEach(function (item) {
         }
 
         if (!data.token) {
-
             throw new Error(
                 'Login succeeded but no token was returned.'
             );
@@ -921,7 +938,7 @@ adminNavItems.forEach(function (item) {
     }
 
     const loginForm =
-        get('adminLoginForm');
+        $('adminLoginForm');
 
     if (loginForm) {
 
@@ -932,17 +949,16 @@ adminNavItems.forEach(function (item) {
                 event.preventDefault();
 
                 const passwordInput =
-                    get('adminPassword');
+                    $('adminPassword');
 
                 const password =
-                    passwordInput?.value.trim() || '';
+                    passwordInput?.value.trim() ||
+                    '';
 
                 if (!password) {
-
                     alert(
                         'Please enter your admin password.'
                     );
-
                     return;
                 }
 
@@ -952,7 +968,6 @@ adminNavItems.forEach(function (item) {
                     );
 
                 if (button) {
-
                     button.disabled = true;
                     button.textContent =
                         'Checking...';
@@ -970,22 +985,23 @@ adminNavItems.forEach(function (item) {
                         'dashboard'
                     );
 
+                    await updateMetrics();
+
                 } catch (error) {
 
                     console.error(
-                        'Login error:',
+                        'Admin login error:',
                         error
                     );
 
                     alert(
                         error.message ||
-                        'Unable to connect to the admin server.'
+                        'Unable to connect to admin server.'
                     );
 
                 } finally {
 
                     if (button) {
-
                         button.disabled = false;
                         button.textContent =
                             'Unlock';
@@ -996,22 +1012,20 @@ adminNavItems.forEach(function (item) {
     }
 
     const logoutButton =
-        get('logoutAdminBtn');
+        $('logoutAdminBtn');
 
     if (logoutButton) {
 
         logoutButton.addEventListener(
             'click',
             function () {
-                logout();
+                clearLogin();
             }
         );
     }
 
     document
-        .querySelectorAll(
-            '.admin-nav-item'
-        )
+        .querySelectorAll('.admin-nav-item')
         .forEach(function (item) {
 
             item.addEventListener(
@@ -1033,10 +1047,9 @@ adminNavItems.forEach(function (item) {
         });
 
     const refreshBookings =
-        get('refreshBookingsBtn');
+        $('refreshBookingsBtn');
 
     if (refreshBookings) {
-
         refreshBookings.addEventListener(
             'click',
             loadBookings
@@ -1044,10 +1057,9 @@ adminNavItems.forEach(function (item) {
     }
 
     const refreshClients =
-        get('refreshClientsBtn');
+        $('refreshClientsBtn');
 
     if (refreshClients) {
-
         refreshClients.addEventListener(
             'click',
             loadClients
@@ -1055,10 +1067,9 @@ adminNavItems.forEach(function (item) {
     }
 
     const refreshContacts =
-        get('refreshContactsBtn');
+        $('refreshContactsBtn');
 
     if (refreshContacts) {
-
         refreshContacts.addEventListener(
             'click',
             loadContacts
@@ -1066,16 +1077,15 @@ adminNavItems.forEach(function (item) {
     }
 
     const addProject =
-        get('addProjectBtn');
+        $('addProjectBtn');
 
     if (addProject) {
 
         addProject.addEventListener(
             'click',
             function () {
-
                 alert(
-                    'Project management will be added here.'
+                    'Project management will be added later.'
                 );
             }
         );
@@ -1085,18 +1095,8 @@ adminNavItems.forEach(function (item) {
         'click',
         function (event) {
 
-            const target =
-                event.target;
-
-            if (
-                !target ||
-                !target.closest
-            ) {
-                return;
-            }
-
             const button =
-                target.closest(
+                event.target.closest(
                     '.admin-action-btn'
                 );
 
@@ -1108,23 +1108,21 @@ adminNavItems.forEach(function (item) {
                 button.dataset.action;
 
             if (action === 'reply') {
-
                 alert(
-                    'Reply functionality will be connected to email.'
+                    'Reply functionality will be connected later.'
                 );
             }
 
             if (action === 'note') {
-
                 alert(
-                    'Notes functionality will be added later.'
+                    'Notes functionality will be connected later.'
                 );
             }
         }
     );
 
     const clearButton =
-        get('clearSubmissionsBtn');
+        $('clearSubmissionsBtn');
 
     if (clearButton) {
 
@@ -1133,11 +1131,9 @@ adminNavItems.forEach(function (item) {
             async function () {
 
                 if (!adminToken) {
-
                     alert(
                         'Please log in again.'
                     );
-
                     return;
                 }
 
@@ -1153,9 +1149,8 @@ adminNavItems.forEach(function (item) {
                 try {
 
                     const response =
-                        await apiRequest(
-                            API_URL +
-                            '/api/submissions',
+                        await apiFetch(
+                            `${API_URL}/api/submissions`,
                             {
                                 method: 'DELETE',
                                 headers:
@@ -1163,12 +1158,8 @@ adminNavItems.forEach(function (item) {
                             }
                         );
 
-                    if (
-                        response.status ===
-                        401
-                    ) {
-
-                        logout();
+                    if (response.status === 401) {
+                        clearLogin();
 
                         throw new Error(
                             'Admin session expired.'
@@ -1176,10 +1167,8 @@ adminNavItems.forEach(function (item) {
                     }
 
                     if (!response.ok) {
-
                         throw new Error(
-                            'Server returned HTTP ' +
-                            response.status
+                            `HTTP ${response.status}`
                         );
                     }
 
@@ -1187,7 +1176,11 @@ adminNavItems.forEach(function (item) {
                         'All submissions have been cleared.'
                     );
 
-                    await updateDashboard();
+                    await updateMetrics();
+
+                    showSection(
+                        'dashboard'
+                    );
 
                 } catch (error) {
 
@@ -1205,67 +1198,70 @@ adminNavItems.forEach(function (item) {
         );
     }
 
-    const preloader =
-        get('preloader');
-
-    function removePreloader() {
-
-        if (!preloader) {
-            return;
-        }
-
-        preloader.style.opacity =
-            '0';
-
-        preloader.style.pointerEvents =
-            'none';
-
-        document.body.style.overflow =
-            'auto';
-
-        setTimeout(function () {
-
-            if (preloader.parentNode) {
-                preloader.remove();
-            }
-
-        }, 300);
-    }
-
-    if (preloader) {
-
-        removePreloader();
-
-        window.addEventListener(
-            'load',
-            removePreloader,
-            {
-                once: true
-            }
-        );
-    }
-
     if (window.AOS) {
 
         try {
-
             window.AOS.init({
                 duration: 800,
                 once: true,
                 easing: 'ease-out-cubic'
             });
-
         } catch (error) {
-
             console.warn(
-                'AOS error:',
+                'AOS initialization failed:',
                 error
             );
         }
     }
 
+    const preloader =
+        $('preloader');
+
+    if (preloader) {
+
+        const removePreloader =
+            function () {
+
+                preloader.style.opacity =
+                    '0';
+
+                preloader.style.pointerEvents =
+                    'none';
+
+                setTimeout(function () {
+
+                    if (preloader.parentNode) {
+                        preloader.remove();
+                    }
+
+                    document.body.style.overflow =
+                        'auto';
+
+                }, 300);
+            };
+
+        if (
+            document.readyState ===
+            'complete'
+        ) {
+            removePreloader();
+        } else {
+
+            window.addEventListener(
+                'load',
+                removePreloader,
+                { once: true }
+            );
+
+            setTimeout(
+                removePreloader,
+                3000
+            );
+        }
+    }
+
     const themeToggle =
-        get('themeToggle');
+        $('themeToggle');
 
     if (themeToggle) {
 
@@ -1275,7 +1271,6 @@ adminNavItems.forEach(function (item) {
             );
 
         if (savedTheme === 'dark') {
-
             document.body.classList.add(
                 'dark'
             );
@@ -1302,10 +1297,10 @@ adminNavItems.forEach(function (item) {
     }
 
     const chatToggle =
-        get('chatToggle');
+        $('chatToggle');
 
     const chatWidget =
-        get('chatWidget');
+        $('chatWidget');
 
     if (
         chatToggle &&
@@ -1324,7 +1319,7 @@ adminNavItems.forEach(function (item) {
     }
 
     const scrollTop =
-        get('scrollTop');
+        $('scrollTop');
 
     if (scrollTop) {
 
@@ -1352,10 +1347,10 @@ adminNavItems.forEach(function (item) {
     }
 
     const cookieBanner =
-        get('cookieBanner');
+        $('cookieBanner');
 
     const acceptCookies =
-        get('acceptCookies');
+        $('acceptCookies');
 
     if (
         cookieBanner &&
@@ -1363,7 +1358,6 @@ adminNavItems.forEach(function (item) {
             'cookiesAccepted'
         )
     ) {
-
         cookieBanner.classList.add(
             'show'
         );
@@ -1380,55 +1374,18 @@ adminNavItems.forEach(function (item) {
                     'true'
                 );
 
-                if (cookieBanner) {
-
-                    cookieBanner.classList.remove(
-                        'show'
-                    );
-                }
-            }
-        );
-    }
-
-    const searchInput =
-        get('searchInput');
-
-    if (searchInput) {
-
-        searchInput.addEventListener(
-            'input',
-            function (event) {
-
-                const query =
-                    event.target.value
-                        .toLowerCase()
-                        .trim();
-
-                document
-                    .querySelectorAll(
-                        'main a, main button, main h1, main h2, main h3, main p'
-                    )
-                    .forEach(
-                        function (element) {
-
-                            const text =
-                                element.textContent
-                                    .toLowerCase();
-
-                            element.style.background =
-                                query &&
-                                text.includes(
-                                    query
-                                )
-                                    ? 'rgba(216, 163, 31, 0.18)'
-                                    : '';
-                        }
-                    );
+                cookieBanner?.classList.remove(
+                    'show'
+                );
             }
         );
     }
 
     if (adminToken) {
+
+        console.log(
+            'Existing admin token found.'
+        );
 
         showDashboard();
 
@@ -1436,7 +1393,13 @@ adminNavItems.forEach(function (item) {
             'dashboard'
         );
 
+        updateMetrics();
+
     } else {
+
+        console.log(
+            'No admin token found.'
+        );
 
         showLogin();
     }
