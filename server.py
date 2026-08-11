@@ -4,12 +4,9 @@ import hmac
 import json
 import os
 import secrets
-import smtplib
-import urllib.parse
 import urllib.error
 import urllib.request
 from datetime import datetime, timezone
-from email.message import EmailMessage
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 
@@ -37,22 +34,21 @@ ADMIN_SECRET = os.environ.get(
     ""
 )
 
-
-GMAIL_SMTP_USER = os.environ.get(
-    "GMAIL_SMTP_USER",
+RESEND_API_KEY = os.environ.get(
+    "RESEND_API_KEY",
     ""
 )
 
-GMAIL_SMTP_PASSWORD = os.environ.get(
-    "GMAIL_SMTP_PASSWORD",
-    ""
-)
-
-RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
 RESEND_FROM_EMAIL = os.environ.get(
     "RESEND_FROM_EMAIL",
     "onboarding@resend.dev"
 )
+
+ADMIN_NOTIFICATION_EMAIL = os.environ.get(
+    "ADMIN_NOTIFICATION_EMAIL",
+    ""
+)
+
 
 TABLE_URL = f"{SUPABASE_URL}/rest/v1/submissions"
 
@@ -96,26 +92,16 @@ def supabase_request(method, url, data=None):
             timeout=30
         ) as response:
 
-            response_body = (
-                response
-                .read()
-                .decode("utf-8")
-            )
+            response_body = response.read().decode("utf-8")
 
             if not response_body:
                 return {}
 
-            return json.loads(
-                response_body
-            )
+            return json.loads(response_body)
 
     except urllib.error.HTTPError as error:
 
-        error_body = (
-            error
-            .read()
-            .decode("utf-8")
-        )
+        error_body = error.read().decode("utf-8")
 
         print(
             f"Supabase error {error.code}: {error_body}",
@@ -124,6 +110,17 @@ def supabase_request(method, url, data=None):
 
         raise RuntimeError(
             f"Supabase returned HTTP {error.code}: {error_body}"
+        )
+
+    except urllib.error.URLError as error:
+
+        print(
+            f"Supabase connection error: {error}",
+            flush=True
+        )
+
+        raise RuntimeError(
+            "Unable to connect to Supabase"
         )
 
 
@@ -186,9 +183,7 @@ def get_secret():
 
     if ADMIN_PASSWORD:
         return hashlib.sha256(
-            ADMIN_PASSWORD.encode(
-                "utf-8"
-            )
+            ADMIN_PASSWORD.encode("utf-8")
         ).hexdigest()
 
     return ""
@@ -211,35 +206,21 @@ def create_admin_token():
         )
     )
 
-    nonce = secrets.token_urlsafe(
-        24
-    )
+    nonce = secrets.token_urlsafe(24)
 
-    payload = (
-        f"{timestamp}.{nonce}"
-    )
+    payload = f"{timestamp}.{nonce}"
 
     signature = hmac.new(
-        secret.encode(
-            "utf-8"
-        ),
-        payload.encode(
-            "utf-8"
-        ),
+        secret.encode("utf-8"),
+        payload.encode("utf-8"),
         hashlib.sha256
     ).hexdigest()
 
-    token_data = (
-        f"{payload}.{signature}"
-    )
+    token_data = f"{payload}.{signature}"
 
     return base64.urlsafe_b64encode(
-        token_data.encode(
-            "utf-8"
-        )
-    ).decode(
-        "utf-8"
-    ).rstrip("=")
+        token_data.encode("utf-8")
+    ).decode("utf-8").rstrip("=")
 
 
 def verify_admin_token(token):
@@ -258,13 +239,9 @@ def verify_admin_token(token):
             4 - len(token) % 4
         )
 
-        decoded = (
-            base64
-            .urlsafe_b64decode(
-                token + padding
-            )
-            .decode("utf-8")
-        )
+        decoded = base64.urlsafe_b64decode(
+            token + padding
+        ).decode("utf-8")
 
         parts = decoded.split(".")
 
@@ -273,17 +250,11 @@ def verify_admin_token(token):
 
         timestamp, nonce, signature = parts
 
-        payload = (
-            f"{timestamp}.{nonce}"
-        )
+        payload = f"{timestamp}.{nonce}"
 
         expected_signature = hmac.new(
-            secret.encode(
-                "utf-8"
-            ),
-            payload.encode(
-                "utf-8"
-            ),
+            secret.encode("utf-8"),
+            payload.encode("utf-8"),
             hashlib.sha256
         ).hexdigest()
 
@@ -293,9 +264,7 @@ def verify_admin_token(token):
         ):
             return False
 
-        token_time = int(
-            timestamp
-        )
+        token_time = int(timestamp)
 
         current_time = int(
             datetime.now(
@@ -314,15 +283,19 @@ def verify_admin_token(token):
         return True
 
     except Exception:
-
         return False
 
 
-def send_email_reply(recipient, subject, message):
+def resend_email(recipient, subject, message):
 
     if not RESEND_API_KEY:
         raise RuntimeError(
             "RESEND_API_KEY is not configured"
+        )
+
+    if not RESEND_FROM_EMAIL:
+        raise RuntimeError(
+            "RESEND_FROM_EMAIL is not configured"
         )
 
     payload = json.dumps({
@@ -350,10 +323,8 @@ def send_email_reply(recipient, subject, message):
             timeout=30
         ) as response:
 
-            response_body = (
-                response
-                .read()
-                .decode("utf-8")
+            response_body = response.read().decode(
+                "utf-8"
             )
 
             if not response_body:
@@ -365,15 +336,12 @@ def send_email_reply(recipient, subject, message):
 
     except urllib.error.HTTPError as error:
 
-        error_body = (
-            error
-            .read()
-            .decode("utf-8")
+        error_body = error.read().decode(
+            "utf-8"
         )
 
         print(
-            f"Resend API error {error.code}: "
-            f"{error_body}",
+            f"Resend API error {error.code}: {error_body}",
             flush=True
         )
 
@@ -389,8 +357,86 @@ def send_email_reply(recipient, subject, message):
         )
 
         raise RuntimeError(
-            "Unable to connect to Resend email service"
+            f"Unable to connect to Resend: {error}"
         )
+
+
+def send_email_reply(
+    recipient,
+    subject,
+    message
+):
+
+    return resend_email(
+        recipient,
+        subject,
+        message
+    )
+
+
+def send_admin_notification(submission):
+
+    if not ADMIN_NOTIFICATION_EMAIL:
+        raise RuntimeError(
+            "ADMIN_NOTIFICATION_EMAIL is not configured"
+        )
+
+    submission_type = str(
+        submission.get(
+            "type",
+            "submission"
+        )
+    ).lower()
+
+    if submission_type == "booking":
+
+        subject = (
+            "New Booking Received - "
+            "Prime Tech & Media"
+        )
+
+        title = "NEW BOOKING RECEIVED"
+
+    else:
+
+        subject = (
+            "New Contact Message - "
+            "Prime Tech & Media"
+        )
+
+        title = "NEW CONTACT MESSAGE"
+
+    name = submission.get("name") or "—"
+    email = submission.get("email") or "—"
+    phone = submission.get("phone") or "—"
+    company = submission.get("company") or "—"
+    service = submission.get("service") or "—"
+    date = submission.get("date") or "—"
+    time = submission.get("time") or "—"
+    budget = submission.get("budget") or "—"
+    message = submission.get("message") or "—"
+
+    body = f"""
+{title}
+
+Name: {name}
+Email: {email}
+Phone: {phone}
+Company: {company}
+Service: {service}
+Date: {date}
+Time: {time}
+Budget: {budget}
+
+Message:
+{message}
+"""
+
+    return resend_email(
+        ADMIN_NOTIFICATION_EMAIL,
+        subject,
+        body
+    )
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -403,13 +449,9 @@ class Handler(BaseHTTPRequestHandler):
 
         response = json.dumps(
             data
-        ).encode(
-            "utf-8"
-        )
+        ).encode("utf-8")
 
-        self.send_response(
-            status
-        )
+        self.send_response(status)
 
         self.send_header(
             "Content-Type",
@@ -438,16 +480,12 @@ class Handler(BaseHTTPRequestHandler):
 
         self.end_headers()
 
-        self.wfile.write(
-            response
-        )
+        self.wfile.write(response)
 
 
     def do_OPTIONS(self):
 
-        self.send_response(
-            204
-        )
+        self.send_response(204)
 
         self.send_header(
             "Access-Control-Allow-Origin",
@@ -479,18 +517,14 @@ class Handler(BaseHTTPRequestHandler):
         ):
             return None
 
-        return authorization[
-            7:
-        ].strip()
+        return authorization[7:].strip()
 
 
     def require_admin(self):
 
         token = self.get_auth_token()
 
-        if not verify_admin_token(
-            token
-        ):
+        if not verify_admin_token(token):
 
             self.send_json(
                 401,
@@ -549,17 +583,13 @@ class Handler(BaseHTTPRequestHandler):
 
                 for submission in submissions:
 
-                    item = dict(
-                        submission
-                    )
+                    item = dict(submission)
 
                     item["createdAt"] = item.get(
                         "created_at"
                     )
 
-                    formatted.append(
-                        item
-                    )
+                    formatted.append(item)
 
                 self.send_json(
                     200,
@@ -609,9 +639,7 @@ class Handler(BaseHTTPRequestHandler):
                 )
 
                 data = json.loads(
-                    raw_body.decode(
-                        "utf-8"
-                    )
+                    raw_body.decode("utf-8")
                 )
 
                 password = data.get(
@@ -624,7 +652,9 @@ class Handler(BaseHTTPRequestHandler):
                     self.send_json(
                         500,
                         {
-                            "error": "Admin password is not configured"
+                            "error": (
+                                "Admin password is not configured"
+                            )
                         }
                     )
 
@@ -711,9 +741,7 @@ class Handler(BaseHTTPRequestHandler):
                 )
 
                 data = json.loads(
-                    raw_body.decode(
-                        "utf-8"
-                    )
+                    raw_body.decode("utf-8")
                 )
 
                 recipient = str(
@@ -742,7 +770,9 @@ class Handler(BaseHTTPRequestHandler):
                     self.send_json(
                         400,
                         {
-                            "error": "Recipient email is required"
+                            "error": (
+                                "Recipient email is required"
+                            )
                         }
                     )
 
@@ -753,7 +783,9 @@ class Handler(BaseHTTPRequestHandler):
                     self.send_json(
                         400,
                         {
-                            "error": "Email subject is required"
+                            "error": (
+                                "Email subject is required"
+                            )
                         }
                     )
 
@@ -764,7 +796,9 @@ class Handler(BaseHTTPRequestHandler):
                     self.send_json(
                         400,
                         {
-                            "error": "Reply message is required"
+                            "error": (
+                                "Reply message is required"
+                            )
                         }
                     )
 
@@ -836,9 +870,7 @@ class Handler(BaseHTTPRequestHandler):
             )
 
             data = json.loads(
-                raw_body.decode(
-                    "utf-8"
-                )
+                raw_body.decode("utf-8")
             )
 
             submission = convert_submission(
@@ -864,10 +896,22 @@ class Handler(BaseHTTPRequestHandler):
 
             saved["createdAt"] = saved.get(
                 "created_at",
-                saved.get(
-                    "createdAt"
-                )
+                saved.get("createdAt")
             )
+
+            try:
+
+                send_admin_notification(
+                    saved
+                )
+
+            except Exception as notification_error:
+
+                print(
+                    "Admin notification error: "
+                    f"{notification_error}",
+                    flush=True
+                )
 
             self.send_json(
                 201,
@@ -945,9 +989,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_HEAD(self):
 
-        self.send_response(
-            200
-        )
+        self.send_response(200)
 
         self.send_header(
             "Access-Control-Allow-Origin",
