@@ -1,4 +1,8 @@
 document.addEventListener('DOMContentLoaded', () => {
+  // =========================================================
+  // AOS
+  // =========================================================
+
   if (window.AOS) {
     window.AOS.init({
       duration: 800,
@@ -7,12 +11,17 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  // =========================================================
+  // EMAIL / API CONFIG
+  // =========================================================
+
   const emailPublicKey = 'YOUR_PUBLIC_KEY';
   const emailServiceId = 'YOUR_SERVICE_ID';
   const emailTemplateId = 'YOUR_TEMPLATE_ID';
   const bookingTemplateId = 'YOUR_BOOKING_TEMPLATE_ID';
 
-  const apiBaseUrl = 'https://primetechmedia-com.onrender.com';
+  const apiBaseUrl =
+    'https://primetechmedia-com.onrender.com';
 
   if (
     emailPublicKey !== 'YOUR_PUBLIC_KEY' &&
@@ -21,6 +30,10 @@ document.addEventListener('DOMContentLoaded', () => {
     window.emailjs.init(emailPublicKey);
   }
 
+  // =========================================================
+  // ADMIN AUTH
+  // =========================================================
+
   let adminToken =
     sessionStorage.getItem('adminToken') || '';
 
@@ -28,21 +41,21 @@ document.addEventListener('DOMContentLoaded', () => {
     return apiBaseUrl;
   }
 
-function getAdminHeaders() {
-  const token =
-    sessionStorage.getItem('adminToken') ||
-    adminToken ||
-    '';
+  function getAdminHeaders() {
+    const token =
+      sessionStorage.getItem('adminToken') ||
+      adminToken ||
+      '';
 
-  if (token) {
-    adminToken = token;
+    if (token) {
+      adminToken = token;
+    }
+
+    return {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`
+    };
   }
-
-  return {
-    'Content-Type': 'application/json',
-    'Authorization': `Bearer ${token}`
-  };
-}
 
   function setAdminView(authenticated) {
     const adminLoginCard =
@@ -67,8 +80,15 @@ function getAdminHeaders() {
   }
 
   function isAdminAuthenticated() {
-    return Boolean(adminToken);
+    return Boolean(
+      sessionStorage.getItem('adminToken') ||
+      adminToken
+    );
   }
+
+  // =========================================================
+  // SUBMISSIONS API
+  // =========================================================
 
   async function saveSubmission(type, payload) {
     const submission = {
@@ -106,6 +126,11 @@ function getAdminHeaders() {
       }
     );
 
+    console.log(
+      'GET submissions status:',
+      response.status
+    );
+
     if (!response.ok) {
       if (response.status === 401) {
         adminToken = '';
@@ -128,6 +153,11 @@ function getAdminHeaders() {
 
     const data = await response.json();
 
+    console.log(
+      'Submissions received:',
+      data
+    );
+
     if (!Array.isArray(data)) {
       throw new Error(
         'Invalid submissions response'
@@ -136,6 +166,10 @@ function getAdminHeaders() {
 
     return data;
   }
+
+  // =========================================================
+  // FORM SUBMISSION
+  // =========================================================
 
   async function handleFormSubmit(
     form,
@@ -173,25 +207,14 @@ function getAdminHeaders() {
         }
       }
 
-      const submissionsTableBody =
-        document.getElementById(
-          'submissionsTableBody'
-        );
-
-      if (submissionsTableBody) {
-        const filter =
-          document.getElementById(
-            'submissionFilter'
-          )?.value || 'all';
-
-        await loadAdminSubmissions(
-          filter
-        );
+      if (isAdminAuthenticated()) {
+        await updateDashboardMetrics();
       }
 
       alert(successMessage);
 
       form.reset();
+
     } catch (error) {
       console.error(
         'Submission failed:',
@@ -204,6 +227,10 @@ function getAdminHeaders() {
     }
   }
 
+  // =========================================================
+  // HTML ESCAPING
+  // =========================================================
+
   function escapeHtml(value) {
     return String(value ?? '')
       .replace(/&/g, '&amp;')
@@ -213,23 +240,121 @@ function getAdminHeaders() {
       .replace(/'/g, '&#039;');
   }
 
-  function renderAdminTable(
-    submissions
-  ) {
+  // =========================================================
+  // DATE FORMAT
+  // =========================================================
+
+  function formatDate(value) {
+    if (!value) {
+      return '—';
+    }
+
+    const date = new Date(value);
+
+    if (Number.isNaN(date.getTime())) {
+      return String(value);
+    }
+
+    return date.toLocaleString();
+  }
+
+  // =========================================================
+  // TYPE NORMALIZATION
+  // =========================================================
+
+  function normalizeType(submission) {
+    return String(
+      submission?.type || ''
+    )
+      .trim()
+      .toLowerCase();
+  }
+
+  // =========================================================
+  // BOOKING FIELD HELPERS
+  // =========================================================
+
+  function getBookingName(booking) {
+    return (
+      booking.name ||
+      booking.customerName ||
+      booking.fullName ||
+      '—'
+    );
+  }
+
+  function getBookingService(booking) {
+    return (
+      booking.service ||
+      booking.serviceCategory ||
+      booking.category ||
+      '—'
+    );
+  }
+
+  function getBookingDate(booking) {
+    return (
+      booking.date ||
+      booking.preferredDate ||
+      booking.bookingDate ||
+      '—'
+    );
+  }
+
+  function getBookingTime(booking) {
+    return (
+      booking.time ||
+      booking.preferredTime ||
+      booking.bookingTime ||
+      '—'
+    );
+  }
+
+  function getBookingBudget(booking) {
+    return (
+      booking.budget ||
+      booking.estimatedBudget ||
+      '—'
+    );
+  }
+
+  function getBookingMessage(booking) {
+    return (
+      booking.message ||
+      booking.projectDescription ||
+      booking.project ||
+      booking.description ||
+      '—'
+    );
+  }
+
+  // =========================================================
+  // RENDER BOOKINGS
+  // =========================================================
+
+  function renderBookings(bookings) {
     const tbody =
-  document.getElementById(
-    'bookingsTableBody'
-  );
+      document.getElementById(
+        'bookingsTableBody'
+      );
 
     if (!tbody) {
+      console.error(
+        'bookingsTableBody not found'
+      );
+
       return;
     }
 
-    if (!submissions.length) {
+    if (!Array.isArray(bookings)) {
+      bookings = [];
+    }
+
+    if (!bookings.length) {
       tbody.innerHTML = `
         <tr>
-          <td colspan="6" class="text-center">
-            No submissions yet.
+          <td colspan="8" class="text-center">
+            No bookings yet.
           </td>
         </tr>
       `;
@@ -237,88 +362,80 @@ function getAdminHeaders() {
       return;
     }
 
-    tbody.innerHTML = submissions
-      .map((submission) => {
-        const sender =
-          submission.name ||
-          submission.customerName ||
-          submission.company ||
-          submission.email ||
-          '—';
-
-        const service =
-          submission.service ||
-          submission.serviceCategory ||
-          submission.subject ||
-          '—';
-
-        const preview =
-          submission.message ||
-          submission.projectDescription ||
-          submission.project ||
-          submission.subject ||
-          submission.service ||
-          submission.serviceCategory ||
-          '—';
-
-        const contact =
-          [
-            submission.email,
-            submission.phone,
-            submission.company
-          ]
-            .filter(Boolean)
-            .join(' • ') || '—';
-
-        const type =
-          submission.type || 'contact';
-
-        const date =
-          submission.createdAt ||
-          submission.created_at;
-
-        const createdOn = date
-          ? new Date(
-              date
-            ).toLocaleString()
-          : '—';
-
+    tbody.innerHTML = bookings
+      .map((booking) => {
         return `
           <tr>
-            <td>
-              <span class="admin-pill">
-                ${escapeHtml(type)}
-              </span>
-            </td>
 
             <td>
               <strong>
-                ${escapeHtml(sender)}
+                ${escapeHtml(
+                  getBookingName(booking)
+                )}
               </strong>
+
               <br>
+
               <small class="text-muted">
-                ${escapeHtml(service)}
+                ${escapeHtml(
+                  booking.company || '—'
+                )}
               </small>
             </td>
 
             <td>
-              ${escapeHtml(preview)}
+              ${escapeHtml(
+                getBookingService(booking)
+              )}
             </td>
 
             <td>
-              ${escapeHtml(createdOn)}
+              ${escapeHtml(
+                getBookingDate(booking)
+              )}
             </td>
 
             <td>
-              ${escapeHtml(contact)}
+              ${escapeHtml(
+                getBookingTime(booking)
+              )}
             </td>
 
             <td>
+              ${escapeHtml(
+                getBookingBudget(booking)
+              )}
+            </td>
+
+            <td>
+              <strong>
+                ${escapeHtml(
+                  booking.email || '—'
+                )}
+              </strong>
+
+              <br>
+
+              <small>
+                ${escapeHtml(
+                  booking.phone || '—'
+                )}
+              </small>
+            </td>
+
+            <td>
+              ${escapeHtml(
+                getBookingMessage(booking)
+              )}
+            </td>
+
+            <td>
+
               <button
                 class="admin-action-btn"
                 data-action="reply"
                 data-id="${escapeHtml(
-                  submission.id || ''
+                  booking.id || ''
                 )}"
                 title="Reply"
               >
@@ -329,152 +446,538 @@ function getAdminHeaders() {
                 class="admin-action-btn"
                 data-action="note"
                 data-id="${escapeHtml(
-                  submission.id || ''
+                  booking.id || ''
                 )}"
                 title="Note"
               >
                 <i class="fa-solid fa-note-sticky"></i>
               </button>
+
             </td>
+
           </tr>
         `;
       })
       .join('');
   }
 
-  async function loadAdminSubmissions(
-    type = 'all'
-  ) {
-    const tableId =
-  type === 'booking'
-    ? 'bookingsTableBody'
-    : 'submissionsTableBody';
+  // =========================================================
+  // RENDER CONTACTS
+  // =========================================================
 
-const tbody =
-  document.getElementById(
-    tableId
-  );
-
-    try {
-      const submissions =
-        await getSubmissions();
-
-      const filtered =
-        type === 'all'
-          ? submissions
-          : submissions.filter(
-              (submission) =>
-                String(
-                  submission.type || ''
-                ).toLowerCase() ===
-                String(type).toLowerCase()
-            );
-
-      renderAdminTable(
-        filtered
+  function renderContacts(contacts) {
+    const tbody =
+      document.getElementById(
+        'contactSubmissionsTableBody'
       );
-    } catch (error) {
+
+    if (!tbody) {
       console.error(
-        'Unable to load admin submissions:',
-        error
+        'contactSubmissionsTableBody not found'
       );
 
+      return;
+    }
+
+    if (!Array.isArray(contacts)) {
+      contacts = [];
+    }
+
+    if (!contacts.length) {
       tbody.innerHTML = `
         <tr>
-          <td colspan="6" class="text-center">
-            Unable to load submissions.
+          <td colspan="7" class="text-center">
+            No messages yet.
           </td>
         </tr>
       `;
+
+      return;
     }
+
+    tbody.innerHTML = contacts
+      .map((contact) => {
+        return `
+          <tr>
+
+            <td>
+              <strong>
+                ${escapeHtml(
+                  contact.name ||
+                  contact.customerName ||
+                  '—'
+                )}
+              </strong>
+            </td>
+
+            <td>
+              ${escapeHtml(
+                contact.email || '—'
+              )}
+            </td>
+
+            <td>
+              ${escapeHtml(
+                contact.phone || '—'
+              )}
+            </td>
+
+            <td>
+              ${escapeHtml(
+                contact.subject ||
+                'Website Enquiry'
+              )}
+            </td>
+
+            <td>
+              ${escapeHtml(
+                contact.message ||
+                contact.projectDescription ||
+                '—'
+              )}
+            </td>
+
+            <td>
+              ${escapeHtml(
+                formatDate(
+                  contact.createdAt ||
+                  contact.created_at
+                )
+              )}
+            </td>
+
+            <td>
+
+              <button
+                class="admin-action-btn"
+                data-action="reply"
+                data-id="${escapeHtml(
+                  contact.id || ''
+                )}"
+                title="Reply"
+              >
+                <i class="fa-solid fa-reply"></i>
+              </button>
+
+              <button
+                class="admin-action-btn"
+                data-action="note"
+                data-id="${escapeHtml(
+                  contact.id || ''
+                )}"
+                title="Note"
+              >
+                <i class="fa-solid fa-note-sticky"></i>
+              </button>
+
+            </td>
+
+          </tr>
+        `;
+      })
+      .join('');
   }
+
+  // =========================================================
+  // RENDER ALL SUBMISSIONS
+  // =========================================================
+
+  function renderAllSubmissions(
+    submissions
+  ) {
+    const tbody =
+      document.getElementById(
+        'submissionsTableBody'
+      );
+
+    if (!tbody) {
+      return;
+    }
+
+    if (!Array.isArray(submissions)) {
+      submissions = [];
+    }
+
+    if (!submissions.length) {
+      tbody.innerHTML = `
+        <tr>
+          <td colspan="7" class="text-center">
+            No submissions yet.
+          </td>
+        </tr>
+      `;
+
+      return;
+    }
+
+    tbody.innerHTML = submissions
+      .map((submission) => {
+        const type =
+          normalizeType(
+            submission
+          );
+
+        return `
+          <tr>
+
+            <td>
+              <span class="admin-pill">
+                ${escapeHtml(
+                  type || 'unknown'
+                )}
+              </span>
+            </td>
+
+            <td>
+              ${escapeHtml(
+                submission.name ||
+                submission.customerName ||
+                '—'
+              )}
+            </td>
+
+            <td>
+              ${escapeHtml(
+                submission.email ||
+                '—'
+              )}
+            </td>
+
+            <td>
+              ${escapeHtml(
+                submission.phone ||
+                '—'
+              )}
+            </td>
+
+            <td>
+              ${escapeHtml(
+                submission.service ||
+                submission.serviceCategory ||
+                '—'
+              )}
+            </td>
+
+            <td>
+              ${escapeHtml(
+                submission.message ||
+                submission.projectDescription ||
+                '—'
+              )}
+            </td>
+
+            <td>
+              ${escapeHtml(
+                formatDate(
+                  submission.createdAt ||
+                  submission.created_at
+                )
+              )}
+            </td>
+
+          </tr>
+        `;
+      })
+      .join('');
+  }
+
+  // =========================================================
+  // CLIENTS
+  // =========================================================
+
+  function loadAdminClients(
+    submissions
+  ) {
+    const tbody =
+      document.getElementById(
+        'clientsTableBody'
+      );
+
+    if (!tbody) {
+      return;
+    }
+
+    const clients = {};
+
+    submissions.forEach(
+      (submission) => {
+        const email =
+          String(
+            submission.email || ''
+          )
+            .trim()
+            .toLowerCase();
+
+        if (!email) {
+          return;
+        }
+
+        const type =
+          normalizeType(
+            submission
+          );
+
+        if (
+          type !== 'booking' &&
+          type !== 'contact'
+        ) {
+          return;
+        }
+
+        if (!clients[email]) {
+          clients[email] = {
+            name:
+              submission.name ||
+              submission.customerName ||
+              '—',
+
+            company:
+              submission.company ||
+              '—',
+
+            email,
+
+            phone:
+              submission.phone ||
+              '—',
+
+            service:
+              submission.service ||
+              submission.serviceCategory ||
+              '—',
+
+            lastActivity:
+              submission.createdAt ||
+              submission.created_at ||
+              null
+          };
+        }
+
+        const currentDate =
+          submission.createdAt ||
+          submission.created_at;
+
+        if (
+          currentDate &&
+          (
+            !clients[email]
+              .lastActivity ||
+            new Date(
+              currentDate
+            ) >
+            new Date(
+              clients[email]
+                .lastActivity
+            )
+          )
+        ) {
+          clients[email]
+            .lastActivity =
+            currentDate;
+        }
+
+        if (
+          clients[email].name === '—' &&
+          (
+            submission.name ||
+            submission.customerName
+          )
+        ) {
+          clients[email].name =
+            submission.name ||
+            submission.customerName;
+        }
+
+        if (
+          clients[email].company === '—' &&
+          submission.company
+        ) {
+          clients[email].company =
+            submission.company;
+        }
+
+        if (
+          clients[email].phone === '—' &&
+          submission.phone
+        ) {
+          clients[email].phone =
+            submission.phone;
+        }
+
+        if (
+          clients[email].service === '—' &&
+          (
+            submission.service ||
+            submission.serviceCategory
+          )
+        ) {
+          clients[email].service =
+            submission.service ||
+            submission.serviceCategory;
+        }
+      }
+    );
+
+    const list =
+      Object.values(clients);
+
+    if (!list.length) {
+      tbody.innerHTML = `
+        <tr>
+          <td colspan="6" class="text-center">
+            No clients yet.
+          </td>
+        </tr>
+      `;
+
+      return;
+    }
+
+    list.sort(
+      (a, b) =>
+        new Date(
+          b.lastActivity || 0
+        ) -
+        new Date(
+          a.lastActivity || 0
+        )
+    );
+
+    tbody.innerHTML = list
+      .map((client) => {
+        return `
+          <tr>
+
+            <td>
+              ${escapeHtml(
+                client.name
+              )}
+            </td>
+
+            <td>
+              ${escapeHtml(
+                client.company
+              )}
+            </td>
+
+            <td>
+              ${escapeHtml(
+                client.email
+              )}
+            </td>
+
+            <td>
+              ${escapeHtml(
+                client.phone
+              )}
+            </td>
+
+            <td>
+              ${escapeHtml(
+                client.service
+              )}
+            </td>
+
+            <td>
+              ${escapeHtml(
+                formatDate(
+                  client.lastActivity
+                )
+              )}
+            </td>
+
+          </tr>
+        `;
+      })
+      .join('');
+  }
+
+  // =========================================================
+  // DASHBOARD METRICS
+  // =========================================================
 
   async function updateDashboardMetrics() {
     try {
       const submissions =
         await getSubmissions();
 
-      const now = new Date();
-
-      const weekAgo =
-        new Date(now);
-
-      weekAgo.setDate(
-        now.getDate() - 7
-      );
-
-      const leadsThisWeek =
-        submissions.filter(
-          (submission) => {
-            const date =
-              submission.createdAt ||
-              submission.created_at;
-
-            if (!date) {
-              return false;
-            }
-
-            return (
-              new Date(date) >=
-              weekAgo
-            );
-          }
-        ).length;
-
       const bookingCount =
         submissions.filter(
           (submission) =>
-            String(
-              submission.type || ''
-            ).toLowerCase() ===
-            'booking'
+            normalizeType(
+              submission
+            ) === 'booking'
+        ).length;
+
+      const contactCount =
+        submissions.filter(
+          (submission) =>
+            normalizeType(
+              submission
+            ) === 'contact'
+        ).length;
+
+      const projectCount =
+        submissions.filter(
+          (submission) =>
+            normalizeType(
+              submission
+            ) === 'project'
         ).length;
 
       const leadsElement =
-  document.getElementById(
-    'totalLeadsMetric'
-  );
+        document.getElementById(
+          'totalLeadsMetric'
+        );
 
-const bookingsElement =
-  document.getElementById(
-    'totalBookingsMetric'
-  );
+      const bookingsElement =
+        document.getElementById(
+          'totalBookingsMetric'
+        );
 
-const contactsElement =
-  document.getElementById(
-    'totalContactsMetric'
-  );
+      const contactsElement =
+        document.getElementById(
+          'totalContactsMetric'
+        );
 
-const projectsElement =
-  document.getElementById(
-    'totalProjectsMetric'
-  );
+      const projectsElement =
+        document.getElementById(
+          'totalProjectsMetric'
+        );
 
       if (leadsElement) {
-  leadsElement.textContent =
-    submissions.length;
-}
+        leadsElement.textContent =
+          submissions.length;
+      }
 
-if (bookingsElement) {
-  bookingsElement.textContent =
-    bookingCount;
-}
+      if (bookingsElement) {
+        bookingsElement.textContent =
+          bookingCount;
+      }
 
-if (contactsElement) {
-  contactsElement.textContent =
-    submissions.filter(
-      (submission) =>
-        String(
-          submission.type || ''
-        ).toLowerCase() ===
-        'contact'
-    ).length;
-}
+      if (contactsElement) {
+        contactsElement.textContent =
+          contactCount;
+      }
 
-if (projectsElement) {
-  projectsElement.textContent =
-    '0';
-}
+      if (projectsElement) {
+        projectsElement.textContent =
+          projectCount;
+      }
+
+      console.log(
+        'Dashboard metrics:',
+        {
+          leads:
+            submissions.length,
+          bookings:
+            bookingCount,
+          contacts:
+            contactCount,
+          projects:
+            projectCount
+        }
+      );
 
     } catch (error) {
       console.error(
@@ -484,15 +987,200 @@ if (projectsElement) {
     }
   }
 
-  const adminLoginCard =
-    document.getElementById(
-      'adminLoginCard'
-    );
+  // =========================================================
+  // LOAD BOOKINGS
+  // =========================================================
 
-  const adminDashboard =
-    document.getElementById(
-      'adminDashboard'
-    );
+  async function loadBookings() {
+    const tbody =
+      document.getElementById(
+        'bookingsTableBody'
+      );
+
+    if (!tbody) {
+      console.error(
+        'Bookings table not found'
+      );
+
+      return;
+    }
+
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="8" class="text-center">
+          Loading bookings...
+        </td>
+      </tr>
+    `;
+
+    try {
+      const submissions =
+        await getSubmissions();
+
+      const bookings =
+        submissions.filter(
+          (item) =>
+            normalizeType(item) ===
+            'booking'
+        );
+
+      console.log(
+        'Bookings:',
+        bookings
+      );
+
+      renderBookings(
+        bookings
+      );
+
+    } catch (error) {
+      console.error(
+        'Unable to load bookings:',
+        error
+      );
+
+      tbody.innerHTML = `
+        <tr>
+          <td colspan="8" class="text-center">
+            Unable to load bookings.
+          </td>
+        </tr>
+      `;
+    }
+  }
+
+  // =========================================================
+  // LOAD CLIENTS
+  // =========================================================
+
+  async function loadClients() {
+    const tbody =
+      document.getElementById(
+        'clientsTableBody'
+      );
+
+    if (!tbody) {
+      return;
+    }
+
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="6" class="text-center">
+          Loading clients...
+        </td>
+      </tr>
+    `;
+
+    try {
+      const submissions =
+        await getSubmissions();
+
+      loadAdminClients(
+        submissions
+      );
+
+    } catch (error) {
+      console.error(
+        'Unable to load clients:',
+        error
+      );
+
+      tbody.innerHTML = `
+        <tr>
+          <td colspan="6" class="text-center">
+            Unable to load clients.
+          </td>
+        </tr>
+      `;
+    }
+  }
+
+  // =========================================================
+  // LOAD CONTACTS
+  // =========================================================
+
+  async function loadContacts() {
+    const tbody =
+      document.getElementById(
+        'contactSubmissionsTableBody'
+      );
+
+    if (!tbody) {
+      return;
+    }
+
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="7" class="text-center">
+          Loading messages...
+        </td>
+      </tr>
+    `;
+
+    try {
+      const submissions =
+        await getSubmissions();
+
+      const contacts =
+        submissions.filter(
+          (item) =>
+            normalizeType(item) ===
+            'contact'
+        );
+
+      console.log(
+        'Contacts:',
+        contacts
+      );
+
+      renderContacts(
+        contacts
+      );
+
+    } catch (error) {
+      console.error(
+        'Unable to load contacts:',
+        error
+      );
+
+      tbody.innerHTML = `
+        <tr>
+          <td colspan="7" class="text-center">
+            Unable to load contact messages.
+          </td>
+        </tr>
+      `;
+    }
+  }
+
+  // =========================================================
+  // LOAD PROJECTS
+  // =========================================================
+
+  async function loadProjects() {
+    const container =
+      document.getElementById(
+        'projectsContainer'
+      );
+
+    if (!container) {
+      return;
+    }
+
+    container.innerHTML = `
+      <div class="col-12">
+        <div class="text-center p-4">
+          <p class="text-muted mb-0">
+            No projects added yet.
+          </p>
+        </div>
+      </div>
+    `;
+  }
+
+  // =========================================================
+  // ADMIN ELEMENTS
+  // =========================================================
 
   const adminLoginForm =
     document.getElementById(
@@ -524,18 +1212,24 @@ if (projectsElement) {
       'clearSubmissionsBtn'
     );
 
+  // =========================================================
+  // ADMIN LOGIN
+  // =========================================================
+
   adminLoginForm?.addEventListener(
     'submit',
     async (event) => {
       event.preventDefault();
 
       const password =
-        adminPasswordInput?.value || '';
+        adminPasswordInput?.value ||
+        '';
 
       if (!password) {
         alert(
           'Please enter your admin password.'
         );
+
         return;
       }
 
@@ -545,10 +1239,12 @@ if (projectsElement) {
             `${getApiBaseUrl()}/api/admin/login`,
             {
               method: 'POST',
+
               headers: {
                 'Content-Type':
                   'application/json'
               },
+
               body: JSON.stringify({
                 password
               })
@@ -563,6 +1259,7 @@ if (projectsElement) {
             data.error ||
             'Incorrect password.'
           );
+
           return;
         }
 
@@ -573,6 +1270,7 @@ if (projectsElement) {
           alert(
             'Login succeeded, but no authentication token was returned.'
           );
+
           return;
         }
 
@@ -591,6 +1289,11 @@ if (projectsElement) {
         adminLoginForm.reset();
 
         await updateDashboardMetrics();
+
+        showSection(
+          'dashboard'
+        );
+
       } catch (error) {
         console.error(
           'Admin login failed:',
@@ -604,6 +1307,10 @@ if (projectsElement) {
     }
   );
 
+  // =========================================================
+  // ADMIN LOGOUT
+  // =========================================================
+
   logoutAdminBtn?.addEventListener(
     'click',
     async () => {
@@ -613,7 +1320,8 @@ if (projectsElement) {
             `${getApiBaseUrl()}/api/admin/logout`,
             {
               method: 'POST',
-              headers: getAdminHeaders()
+              headers:
+                getAdminHeaders()
             }
           );
         }
@@ -638,12 +1346,21 @@ if (projectsElement) {
     }
   );
 
+  // =========================================================
+  // ADMIN SECTION NAVIGATION
+  // =========================================================
+
   function showSection(name) {
+    console.log(
+      'Opening admin section:',
+      name
+    );
+
     adminNavItems.forEach(
-      (button) => {
-        button.classList.toggle(
+      (item) => {
+        item.classList.toggle(
           'active',
-          button.dataset.section ===
+          item.dataset.section ===
             name
         );
       }
@@ -651,50 +1368,71 @@ if (projectsElement) {
 
     adminSections.forEach(
       (section) => {
+        const isActive =
+          section.dataset.section ===
+          name;
+
         section.classList.toggle(
           'd-none',
-          section.dataset.section !==
-            name
+          !isActive
+        );
+
+        section.classList.toggle(
+          'admin-section--active',
+          isActive
         );
       }
     );
 
+    if (name === 'dashboard') {
+      updateDashboardMetrics();
+    }
+
     if (name === 'bookings') {
-      loadAdminSubmissions(
-        'booking'
-      );
+      loadBookings();
+    }
+
+    if (name === 'clients') {
+      loadClients();
+    }
+
+    if (name === 'projects') {
+      loadProjects();
     }
 
     if (name === 'contact-forms') {
-      loadAdminSubmissions(
-        'contact'
-      );
-    }
-
-    if (name === 'submissions') {
-      loadAdminSubmissions(
-        'all'
-      );
+      loadContacts();
     }
   }
 
   adminNavItems.forEach(
-    (navItem) => {
-      navItem.addEventListener(
+    (item) => {
+      item.addEventListener(
         'click',
         () => {
-          const section =
-            navItem.dataset.section;
+          const sectionName =
+            item.dataset.section;
 
-          if (!section) {
+          console.log(
+            'Navigation clicked:',
+            sectionName
+          );
+
+          if (!sectionName) {
             return;
           }
 
-          showSection(section);
+          showSection(
+            sectionName
+          );
         }
       );
     }
   );
+
+  // =========================================================
+  // CLEAR SUBMISSIONS
+  // =========================================================
 
   async function clearSubmissions() {
     const response =
@@ -702,12 +1440,16 @@ if (projectsElement) {
         `${getApiBaseUrl()}/api/submissions`,
         {
           method: 'DELETE',
-          headers: getAdminHeaders()
+          headers:
+            getAdminHeaders()
         }
       );
 
     if (!response.ok) {
-      if (response.status === 401) {
+      if (
+        response.status ===
+        401
+      ) {
         adminToken = '';
 
         sessionStorage.removeItem(
@@ -734,6 +1476,7 @@ if (projectsElement) {
         alert(
           'Please log in again.'
         );
+
         return;
       }
 
@@ -755,9 +1498,12 @@ if (projectsElement) {
 
         await updateDashboardMetrics();
 
-        await loadAdminSubmissions(
-          'all'
-        );
+        await loadBookings();
+
+        await loadContacts();
+
+        await loadClients();
+
       } catch (error) {
         console.error(
           'Clear submissions failed:',
@@ -770,6 +1516,10 @@ if (projectsElement) {
       }
     }
   );
+
+  // =========================================================
+  // ADMIN ACTION BUTTONS
+  // =========================================================
 
   document.addEventListener(
     'click',
@@ -786,6 +1536,15 @@ if (projectsElement) {
       const action =
         button.dataset.action;
 
+      const id =
+        button.dataset.id;
+
+      console.log(
+        'Admin action:',
+        action,
+        id
+      );
+
       if (action === 'reply') {
         alert(
           'Reply functionality will be connected to email next.'
@@ -800,12 +1559,87 @@ if (projectsElement) {
     }
   );
 
+  // =========================================================
+  // REFRESH BUTTONS
+  // =========================================================
+
+  document
+    .getElementById(
+      'refreshBookingsBtn'
+    )
+    ?.addEventListener(
+      'click',
+      () => {
+        loadBookings();
+      }
+    );
+
+  document
+    .getElementById(
+      'refreshContactsBtn'
+    )
+    ?.addEventListener(
+      'click',
+      () => {
+        loadContacts();
+      }
+    );
+
+  document
+    .getElementById(
+      'refreshClientsBtn'
+    )
+    ?.addEventListener(
+      'click',
+      () => {
+        loadClients();
+      }
+    );
+
+  document
+    .getElementById(
+      'addProjectBtn'
+    )
+    ?.addEventListener(
+      'click',
+      () => {
+        alert(
+          'Project management will be added next.'
+        );
+      }
+    );
+
+  // =========================================================
+  // INITIAL ADMIN STATE
+  // =========================================================
+
   if (isAdminAuthenticated()) {
     setAdminView(true);
-    updateDashboardMetrics();
+
+    console.log(
+      'Admin authenticated. Loading dashboard...'
+    );
+
+    updateDashboardMetrics()
+      .then(() => {
+        console.log(
+          'Dashboard metrics loaded successfully.'
+        );
+      })
+      .catch((error) => {
+        console.error(
+          'Dashboard loading failed:',
+          error
+        );
+      });
+
   } else {
     setAdminView(false);
   }
+
+  // =========================================================
+  // PRELOADER
+  // =========================================================
 
   const preloader =
     document.getElementById(
@@ -816,16 +1650,25 @@ if (projectsElement) {
     window.addEventListener(
       'load',
       () => {
-        preloader.style.opacity = '0';
+        preloader.style.opacity =
+          '0';
+
         preloader.style.pointerEvents =
           'none';
 
-        setTimeout(() => {
-          preloader.remove();
-        }, 500);
+        setTimeout(
+          () => {
+            preloader.remove();
+          },
+          500
+        );
       }
     );
   }
+
+  // =========================================================
+  // THEME
+  // =========================================================
 
   const themeToggle =
     document.getElementById(
@@ -837,32 +1680,38 @@ if (projectsElement) {
       'theme'
     );
 
-  if (savedTheme === 'dark') {
+  if (
+    savedTheme === 'dark'
+  ) {
     document.body.classList.add(
       'dark'
     );
   }
 
-  if (themeToggle) {
-    themeToggle.addEventListener(
-      'click',
-      () => {
-        document.body.classList.toggle(
+  themeToggle?.addEventListener(
+    'click',
+    () => {
+      document.body.classList.toggle(
+        'dark'
+      );
+
+      const isDark =
+        document.body.classList.contains(
           'dark'
         );
 
-        const isDark =
-          document.body.classList.contains(
-            'dark'
-          );
+      localStorage.setItem(
+        'theme',
+        isDark
+          ? 'dark'
+          : 'light'
+      );
+    }
+  );
 
-        localStorage.setItem(
-          'theme',
-          isDark ? 'dark' : 'light'
-        );
-      }
-    );
-  }
+  // =========================================================
+  // CHAT
+  // =========================================================
 
   const chatToggle =
     document.getElementById(
@@ -874,7 +1723,10 @@ if (projectsElement) {
       'chatWidget'
     );
 
-  if (chatToggle && chatWidget) {
+  if (
+    chatToggle &&
+    chatWidget
+  ) {
     chatToggle.addEventListener(
       'click',
       () => {
@@ -885,6 +1737,10 @@ if (projectsElement) {
     );
   }
 
+  // =========================================================
+  // SCROLL TO TOP
+  // =========================================================
+
   const scrollTop =
     document.getElementById(
       'scrollTop'
@@ -893,7 +1749,10 @@ if (projectsElement) {
   window.addEventListener(
     'scroll',
     () => {
-      if (window.scrollY > 500) {
+      if (
+        window.scrollY >
+        500
+      ) {
         scrollTop?.classList.add(
           'show'
         );
@@ -914,6 +1773,10 @@ if (projectsElement) {
       });
     }
   );
+
+  // =========================================================
+  // COOKIES
+  // =========================================================
 
   const cookieBanner =
     document.getElementById(
@@ -950,6 +1813,10 @@ if (projectsElement) {
     }
   );
 
+  // =========================================================
+  // NEWSLETTER
+  // =========================================================
+
   const newsletterForm =
     document.getElementById(
       'newsletterForm'
@@ -967,6 +1834,10 @@ if (projectsElement) {
       );
     }
   );
+
+  // =========================================================
+  // BOOKING FORM
+  // =========================================================
 
   const bookingForm =
     document.getElementById(
@@ -987,6 +1858,10 @@ if (projectsElement) {
     }
   );
 
+  // =========================================================
+  // CONTACT FORM
+  // =========================================================
+
   const contactForm =
     document.getElementById(
       'contactForm'
@@ -1006,6 +1881,10 @@ if (projectsElement) {
     }
   );
 
+  // =========================================================
+  // PORTFOLIO FILTERS
+  // =========================================================
+
   const filterButtons =
     document.querySelectorAll(
       '.filter-btn'
@@ -1022,10 +1901,11 @@ if (projectsElement) {
         'click',
         () => {
           filterButtons.forEach(
-            (btn) =>
+            (btn) => {
               btn.classList.remove(
                 'active'
-              )
+              );
+            }
           );
 
           button.classList.add(
@@ -1038,11 +1918,14 @@ if (projectsElement) {
           filterItems.forEach(
             (item) => {
               const categories =
-                item.dataset.category;
+                item.dataset.category ||
+                '';
 
               if (
                 filter === 'all' ||
-                filter === categories
+                categories
+                  .split(' ')
+                  .includes(filter)
               ) {
                 item.style.display =
                   'block';
@@ -1057,6 +1940,10 @@ if (projectsElement) {
     }
   );
 
+  // =========================================================
+  // TESTIMONIALS
+  // =========================================================
+
   const testimonials =
     document.querySelectorAll(
       '.testimonial'
@@ -1065,23 +1952,42 @@ if (projectsElement) {
   if (testimonials.length) {
     let index = 0;
 
-    setInterval(() => {
-      testimonials.forEach(
-        (item) =>
-          item.classList.remove(
-            'active'
-          )
-      );
+    testimonials.forEach(
+      (item, itemIndex) => {
+        item.classList.toggle(
+          'active',
+          itemIndex === 0
+        );
+      }
+    );
 
-      index =
-        (index + 1) %
-        testimonials.length;
+    setInterval(
+      () => {
+        testimonials.forEach(
+          (item) => {
+            item.classList.remove(
+              'active'
+            );
+          }
+        );
 
-      testimonials[index].classList.add(
-        'active'
-      );
-    }, 5000);
+        index =
+          (index + 1) %
+          testimonials.length;
+
+        testimonials[
+          index
+        ].classList.add(
+          'active'
+        );
+      },
+      5000
+    );
   }
+
+  // =========================================================
+  // SEARCH
+  // =========================================================
 
   const searchInput =
     document.getElementById(
@@ -1092,26 +1998,44 @@ if (projectsElement) {
     'input',
     (event) => {
       const query =
-        event.target.value.toLowerCase();
+        String(
+          event.target.value || ''
+        ).toLowerCase();
 
       document
         .querySelectorAll(
           'main a, main button, main h1, main h2, main h3, main p'
         )
-        .forEach((element) => {
-          const text =
-            element.textContent.toLowerCase();
+        .forEach(
+          (element) => {
+            const text =
+              element.textContent
+                .toLowerCase();
 
-          if (text.includes(query)) {
-            element.style.background =
-              query
-                ? 'rgba(216, 163, 31, 0.18)'
-                : '';
-          } else {
-            element.style.background =
-              '';
+            if (
+              query &&
+              text.includes(query)
+            ) {
+              element.style.background =
+                'rgba(216, 163, 31, 0.18)';
+            } else {
+              element.style.background =
+                '';
+            }
           }
-        });
+        );
     }
   );
+
+  // =========================================================
+  // INITIAL SECTION
+  // =========================================================
+
+  if (
+    isAdminAuthenticated()
+  ) {
+    showSection(
+      'dashboard'
+    );
+  }
 });
