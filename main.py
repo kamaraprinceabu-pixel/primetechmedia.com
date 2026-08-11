@@ -442,6 +442,9 @@ class Handler(BaseHTTPRequestHandler):
 
 
 if __name__ == '__main__':
-    server = ThreadingHTTPServer(('127.0.0.1', 8001), Handler)
-    print('Server running on http://127.0.0.1:8001')
+    host = '0.0.0.0'
+    port = int(os.environ.get('PORT', '8001'))
+
+    server = ThreadingHTTPServer((host, port), Handler)
+    print(f'Server running on {host}:{port}')
     server.serve_forever()

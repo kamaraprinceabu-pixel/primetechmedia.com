@@ -795,3 +795,7 @@ body.dark .navbar {
   background: var(--surface-color);
   color: var(--primary-color);
 }
+
+#preloader {
+    display: none !important;
+}

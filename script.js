@@ -17,14 +17,49 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function normalizeType(item) {
-    return String(
+    const value = String(
         item?.type ||
         item?.submissionType ||
+        item?.submission_type ||
         item?.category ||
+        item?.formType ||
+        item?.form_type ||
         ''
     )
         .trim()
-        .toLowerCase();
+        .toLowerCase()
+        .replace(/[-\s]+/g, '_');
+
+    if (
+        value === 'booking' ||
+        value === 'bookings' ||
+        value === 'booking_request' ||
+        value === 'booking_form' ||
+        value.includes('booking')
+    ) {
+        return 'booking';
+    }
+
+    if (
+        value === 'contact' ||
+        value === 'contacts' ||
+        value === 'contact_form' ||
+        value === 'contact_forms' ||
+        value === 'contact_submission' ||
+        value.includes('contact')
+    ) {
+        return 'contact';
+    }
+
+    if (
+        value === 'newsletter' ||
+        value === 'subscription' ||
+        value === 'subscribe'
+    ) {
+        return 'newsletter';
+    }
+
+    return value;
 }
 
     function formatDate(value) {
@@ -122,7 +157,6 @@ document.addEventListener('DOMContentLoaded', function () {
                 headers: getHeaders()
             }
         );
-
         if (response.status === 401) {
             clearLogin();
             throw new Error(
@@ -147,12 +181,190 @@ document.addEventListener('DOMContentLoaded', function () {
 
         return data;
     }
+    async function saveSubmission(type, payload) {
+        const submission = {
+            type: type,
+            ...payload,
+            createdAt: new Date().toISOString()
+        };
 
+        console.log('Sending submission:', submission);
+
+        const response = await apiFetch(
+            `${API_URL}/api/submissions`,
+            {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(submission)
+            }
+        );
+
+        let data = {};
+
+        try {
+            data = await response.json();
+        } catch (error) {
+            data = {};
+        }
+
+        console.log('Submission response:', {
+            status: response.status,
+            data: data
+        });
+
+        if (!response.ok) {
+            throw new Error(
+                data.error ||
+                `Unable to save submission. HTTP ${response.status}`
+            );
+        }
+
+        return data;
+    }
+
+
+    async function handleFormSubmit(
+        form,
+        type,
+        successMessage
+    ) {
+        if (!form) {
+            return;
+        }
+
+        const submitButton =
+            form.querySelector(
+                'button[type="submit"], input[type="submit"]'
+            );
+
+        const originalButtonText =
+            submitButton
+                ? submitButton.textContent
+                : '';
+
+        const payload =
+            Object.fromEntries(
+                new FormData(form).entries()
+            );
+
+        console.log(
+            `Submitting ${type}:`,
+            payload
+        );
+
+        try {
+
+            if (submitButton) {
+                submitButton.disabled = true;
+                submitButton.textContent =
+                    'Sending...';
+            }
+
+            await saveSubmission(
+                type,
+                payload
+            );
+
+            alert(successMessage);
+
+            form.reset();
+
+        } catch (error) {
+
+            console.error(
+                `${type} submission failed:`,
+                error
+            );
+
+            alert(
+                error.message ||
+                'Unable to save your submission right now. Please try again.'
+            );
+
+        } finally {
+
+            if (submitButton) {
+                submitButton.disabled = false;
+                submitButton.textContent =
+                    originalButtonText;
+            }
+        }
+    }
+
+
+    const bookingForm =
+        document.getElementById(
+            'bookingForm'
+        );
+
+    if (bookingForm) {
+
+        bookingForm.addEventListener(
+            'submit',
+            function (event) {
+
+                event.preventDefault();
+
+                handleFormSubmit(
+                    bookingForm,
+                    'booking',
+                    'Booking request received. Our team will contact you shortly.'
+                );
+            }
+        );
+    }
+
+
+    const contactForm =
+        document.getElementById(
+            'contactForm'
+        );
+
+    if (contactForm) {
+
+        contactForm.addEventListener(
+            'submit',
+            function (event) {
+
+                event.preventDefault();
+
+                handleFormSubmit(
+                    contactForm,
+                    'contact',
+                    'Message sent successfully. We will reply soon.'
+                );
+            }
+        );
+    }
+
+
+    const newsletterForm =
+        document.getElementById(
+            'newsletterForm'
+        );
+
+    if (newsletterForm) {
+
+        newsletterForm.addEventListener(
+            'submit',
+            function (event) {
+
+                event.preventDefault();
+
+                handleFormSubmit(
+                    newsletterForm,
+                    'newsletter',
+                    'Thank you for subscribing!'
+                );
+            }
+        );
+    }
     async function updateMetrics() {
         const leadsElement = $('totalLeadsMetric');
         const bookingsElement = $('totalBookingsMetric');
         const contactsElement = $('totalContactsMetric');
-        const projectsElement = $('totalProjectsMetric');
 
         if (leadsElement) {
             leadsElement.textContent = '...';
@@ -164,10 +376,6 @@ document.addEventListener('DOMContentLoaded', function () {
 
         if (contactsElement) {
             contactsElement.textContent = '...';
-        }
-
-        if (projectsElement) {
-            projectsElement.textContent = '0';
         }
 
         try {
@@ -193,10 +401,6 @@ document.addEventListener('DOMContentLoaded', function () {
                 contactsElement.textContent = contacts.length;
             }
 
-            if (projectsElement) {
-                projectsElement.textContent = '0';
-            }
-
             console.log('Dashboard metrics updated:', {
                 leads: submissions.length,
                 bookings: bookings.length,
@@ -220,463 +424,455 @@ document.addEventListener('DOMContentLoaded', function () {
             if (contactsElement) {
                 contactsElement.textContent = '0';
             }
-
-            if (projectsElement) {
-                projectsElement.textContent = '0';
-            }
         }
     }
 
     function renderBookings(bookings) {
-        const tbody = $('bookingsTableBody');
+    const tbody = document.getElementById('bookingsTableBody');
 
-        if (!tbody) {
-            console.error(
-                'bookingsTableBody does not exist.'
-            );
-            return;
-        }
-
-        if (!bookings.length) {
-            tbody.innerHTML = `
-                <tr>
-                    <td colspan="8" class="text-center">
-                        No bookings yet.
-                    </td>
-                </tr>
-            `;
-            return;
-        }
-
-        tbody.innerHTML = bookings.map(function (booking) {
-
-            const name =
-                booking.name ||
-                booking.customerName ||
-                '—';
-
-            const company =
-                booking.company ||
-                '—';
-
-            const service =
-                booking.service ||
-                booking.serviceCategory ||
-                '—';
-
-            const date =
-                booking.date ||
-                booking.preferredDate ||
-                '—';
-
-            const time =
-                booking.time ||
-                booking.preferredTime ||
-                '—';
-
-            const budget =
-                booking.budget ||
-                '—';
-
-            const email =
-                booking.email ||
-                '—';
-
-            const phone =
-                booking.phone ||
-                '—';
-
-            const message =
-                booking.message ||
-                booking.projectDescription ||
-                booking.project ||
-                '—';
-
-            return `
-                <tr>
-
-                    <td>
-                        <strong>
-                            ${escapeHtml(name)}
-                        </strong>
-                        <br>
-                        <small class="text-muted">
-                            ${escapeHtml(company)}
-                        </small>
-                    </td>
-
-                    <td>
-                        ${escapeHtml(service)}
-                    </td>
-
-                    <td>
-                        ${escapeHtml(date)}
-                    </td>
-
-                    <td>
-                        ${escapeHtml(time)}
-                    </td>
-
-                    <td>
-                        ${escapeHtml(budget)}
-                    </td>
-
-                    <td>
-                        <strong>
-                            ${escapeHtml(email)}
-                        </strong>
-                        <br>
-                        <small>
-                            ${escapeHtml(phone)}
-                        </small>
-                    </td>
-
-                    <td>
-                        ${escapeHtml(message)}
-                    </td>
-
-                    <td>
-
-                        <button
-                            type="button"
-                            class="admin-action-btn"
-                            data-action="reply"
-                            data-id="${escapeHtml(booking.id || '')}"
-                            title="Reply"
-                        >
-                            <i class="fa-solid fa-reply"></i>
-                        </button>
-
-                        <button
-                            type="button"
-                            class="admin-action-btn"
-                            data-action="note"
-                            data-id="${escapeHtml(booking.id || '')}"
-                            title="Note"
-                        >
-                            <i class="fa-solid fa-note-sticky"></i>
-                        </button>
-
-                    </td>
-
-                </tr>
-            `;
-        }).join('');
+    if (!tbody) {
+        console.error('bookingsTableBody not found');
+        return;
     }
 
-    function renderContacts(contacts) {
-        const tbody = $('contactSubmissionsTableBody');
+    console.log('Rendering bookings:', bookings);
 
-        if (!tbody) {
-            console.error(
-                'contactSubmissionsTableBody does not exist.'
-            );
-            return;
-        }
-
-        if (!contacts.length) {
-            tbody.innerHTML = `
-                <tr>
-                    <td colspan="7" class="text-center">
-                        No messages yet.
-                    </td>
-                </tr>
-            `;
-            return;
-        }
-
-        tbody.innerHTML = contacts.map(function (contact) {
-
-            const name =
-                contact.name ||
-                contact.customerName ||
-                '—';
-
-            const email =
-                contact.email ||
-                '—';
-
-            const phone =
-                contact.phone ||
-                '—';
-
-            const subject =
-                contact.subject ||
-                'Website Enquiry';
-
-            const message =
-                contact.message ||
-                '—';
-
-            const date =
-                contact.createdAt ||
-                contact.created_at;
-
-            return `
-                <tr>
-
-                    <td>
-                        <strong>
-                            ${escapeHtml(name)}
-                        </strong>
-                    </td>
-
-                    <td>
-                        ${escapeHtml(email)}
-                    </td>
-
-                    <td>
-                        ${escapeHtml(phone)}
-                    </td>
-
-                    <td>
-                        ${escapeHtml(subject)}
-                    </td>
-
-                    <td>
-                        ${escapeHtml(message)}
-                    </td>
-
-                    <td>
-                        ${escapeHtml(formatDate(date))}
-                    </td>
-
-                    <td>
-
-                        <button
-                            type="button"
-                            class="admin-action-btn"
-                            data-action="reply"
-                            data-id="${escapeHtml(contact.id || '')}"
-                            title="Reply"
-                        >
-                            <i class="fa-solid fa-reply"></i>
-                        </button>
-
-                        <button
-                            type="button"
-                            class="admin-action-btn"
-                            data-action="note"
-                            data-id="${escapeHtml(contact.id || '')}"
-                            title="Note"
-                        >
-                            <i class="fa-solid fa-note-sticky"></i>
-                        </button>
-
-                    </td>
-
-                </tr>
-            `;
-        }).join('');
+    if (!Array.isArray(bookings) || bookings.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="8" class="text-center">
+                    No bookings yet.
+                </td>
+            </tr>
+        `;
+        return;
     }
 
-    function renderClients(submissions) {
-        const tbody = $('clientsTableBody');
+    tbody.innerHTML = bookings.map((booking) => {
 
-        if (!tbody) {
-            console.error(
-                'clientsTableBody does not exist.'
-            );
-            return;
-        }
+        const name =
+            booking.name ||
+            booking.customerName ||
+            '—';
 
-        const clients = {};
+        const service =
+            booking.service ||
+            booking.serviceCategory ||
+            booking.category ||
+            '—';
 
-        submissions.forEach(function (submission) {
+        const date =
+            booking.date ||
+            booking.preferredDate ||
+            booking.bookingDate ||
+            '—';
 
-            const type = normalizeType(submission);
+        const time =
+            booking.time ||
+            booking.preferredTime ||
+            booking.bookingTime ||
+            '—';
 
-            if (
-                type !== 'booking' &&
-                type !== 'contact'
-            ) {
-                return;
-            }
+        const budget =
+            booking.budget ||
+            booking.projectBudget ||
+            '—';
 
-            const email = String(
-    submission.email ||
-    submission.phone ||
-    submission.name ||
-    submission.customerName ||
-    ''
-)
-    .trim()
-    .toLowerCase();
+        const email =
+            booking.email ||
+            '—';
 
-if (!email) {
-    return;
+        const phone =
+            booking.phone ||
+            booking.phoneNumber ||
+            '—';
+
+        const message =
+            booking.message ||
+            booking.projectDescription ||
+            booking.description ||
+            booking.project ||
+            '—';
+
+        return `
+            <tr>
+
+                <td>
+                    <strong>${escapeHtml(name)}</strong>
+                    ${
+                        booking.company
+                            ? `<br><small class="text-muted">${escapeHtml(booking.company)}</small>`
+                            : ''
+                    }
+                </td>
+
+                <td>
+                    ${escapeHtml(service)}
+                </td>
+
+                <td>
+                    ${escapeHtml(date)}
+                </td>
+
+                <td>
+                    ${escapeHtml(time)}
+                </td>
+
+                <td>
+                    ${escapeHtml(budget)}
+                </td>
+
+                <td>
+                    <strong>${escapeHtml(email)}</strong>
+                    <br>
+                    <small>${escapeHtml(phone)}</small>
+                </td>
+
+                <td>
+                    ${escapeHtml(message)}
+                </td>
+
+                <td>
+                    <button
+                        type="button"
+                        class="admin-action-btn"
+                        data-action="reply"
+                        data-id="${escapeHtml(booking.id || '')}"
+                        title="Reply"
+                    >
+                        <i class="fa-solid fa-reply"></i>
+                    </button>
+
+                    <button
+                        type="button"
+                        class="admin-action-btn"
+                        data-action="note"
+                        data-id="${escapeHtml(booking.id || '')}"
+                        title="Note"
+                    >
+                        <i class="fa-solid fa-note-sticky"></i>
+                    </button>
+                </td>
+
+            </tr>
+        `;
+    }).join('');
+
+    console.log(
+        'Bookings rendered:',
+        tbody.children.length
+    );
 }
 
-            const activity =
-                submission.createdAt ||
-                submission.created_at ||
-                null;
+    function renderContacts(contacts) {
+    const tbody = document.getElementById(
+        'contactSubmissionsTableBody'
+    );
 
-            if (!clients[email]) {
+    if (!tbody) {
+        console.error(
+            'contactSubmissionsTableBody not found'
+        );
+        return;
+    }
 
-                clients[email] = {
-                    name:
-                        submission.name ||
-                        submission.customerName ||
-                        '—',
+    console.log(
+        'Rendering contacts:',
+        contacts
+    );
 
-                    company:
-                        submission.company ||
-                        '—',
+    if (!Array.isArray(contacts) || contacts.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="7" class="text-center">
+                    No messages yet.
+                </td>
+            </tr>
+        `;
+        return;
+    }
 
-                    email: email,
+    tbody.innerHTML = contacts.map((contact) => {
 
-                    phone:
-                        submission.phone ||
-                        '—',
+        const name =
+            contact.name ||
+            contact.customerName ||
+            '—';
 
-                    service:
-                        submission.service ||
-                        submission.serviceCategory ||
-                        '—',
+        const email =
+            contact.email ||
+            '—';
 
-                    submissions: 1,
+        const phone =
+            contact.phone ||
+            contact.phoneNumber ||
+            '—';
 
-                    lastActivity: activity
-                };
+        const subject =
+            contact.subject ||
+            contact.title ||
+            'Website Enquiry';
 
-                return;
-            }
+        const message =
+            contact.message ||
+            contact.description ||
+            '—';
 
-            const client = clients[email];
+        const date =
+            contact.createdAt ||
+            contact.created_at ||
+            contact.date;
 
-            client.submissions += 1;
+        return `
+            <tr>
 
-            if (
-                activity &&
-                (
-                    !client.lastActivity ||
-                    new Date(activity) >
-                    new Date(client.lastActivity)
-                )
-            ) {
-                client.lastActivity = activity;
-            }
+                <td>
+                    <strong>
+                        ${escapeHtml(name)}
+                    </strong>
+                </td>
 
-            if (
-                client.name === '—' &&
-                submission.name
-            ) {
-                client.name = submission.name;
-            }
+                <td>
+                    ${escapeHtml(email)}
+                </td>
 
-            if (
-                client.company === '—' &&
-                submission.company
-            ) {
-                client.company =
-                    submission.company;
-            }
+                <td>
+                    ${escapeHtml(phone)}
+                </td>
 
-            if (
-                client.phone === '—' &&
-                submission.phone
-            ) {
-                client.phone =
-                    submission.phone;
-            }
+                <td>
+                    ${escapeHtml(subject)}
+                </td>
 
-            if (
-                client.service === '—' &&
-                (
-                    submission.service ||
-                    submission.serviceCategory
-                )
-            ) {
-                client.service =
-                    submission.service ||
-                    submission.serviceCategory;
-            }
-        });
+                <td>
+                    ${escapeHtml(message)}
+                </td>
 
-        const clientList =
-            Object.values(clients);
+                <td>
+                    ${escapeHtml(formatDate(date))}
+                </td>
 
-        if (!clientList.length) {
-            tbody.innerHTML = `
+                <td>
+                    <button
+                        type="button"
+                        class="admin-action-btn"
+                        data-action="reply"
+                        data-id="${escapeHtml(contact.id || '')}"
+                        title="Reply"
+                    >
+                        <i class="fa-solid fa-reply"></i>
+                    </button>
+
+                    <button
+                        type="button"
+                        class="admin-action-btn"
+                        data-action="note"
+                        data-id="${escapeHtml(contact.id || '')}"
+                        title="Note"
+                    >
+                        <i class="fa-solid fa-note-sticky"></i>
+                    </button>
+                </td>
+
+            </tr>
+        `;
+    }).join('');
+
+    console.log(
+        'Contacts rendered:',
+        tbody.children.length
+    );
+}
+
+    function renderClients(submissions) {
+    const tbody = document.getElementById('clientsTableBody');
+
+    if (!tbody) {
+        console.error('clientsTableBody does not exist.');
+        return;
+    }
+
+    console.log('CLIENT SOURCE DATA:', submissions);
+
+    if (!Array.isArray(submissions)) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="6" class="text-center text-danger">
+                    Invalid client data.
+                </td>
+            </tr>
+        `;
+        return;
+    }
+
+    const clients = new Map();
+
+    submissions.forEach(function (submission) {
+        if (!submission) {
+            return;
+        }
+
+        const email = String(
+            submission.email || ''
+        ).trim().toLowerCase();
+
+        if (!email) {
+            return;
+        }
+
+        const name =
+            submission.name ||
+            submission.customerName ||
+            '—';
+
+        const company =
+            submission.company ||
+            '—';
+
+        const phone =
+            submission.phone ||
+            '—';
+
+        const service =
+            submission.service ||
+            submission.serviceCategory ||
+            '—';
+
+        const activity =
+            submission.createdAt ||
+            submission.created_at ||
+            null;
+
+        if (!clients.has(email)) {
+            clients.set(email, {
+                name: name,
+                company: company,
+                email: email,
+                phone: phone,
+                service: service,
+                submissions: 1,
+                lastActivity: activity
+            });
+
+            return;
+        }
+
+        const client = clients.get(email);
+
+        client.submissions += 1;
+
+        if (
+            activity &&
+            (
+                !client.lastActivity ||
+                new Date(activity) >
+                new Date(client.lastActivity)
+            )
+        ) {
+            client.lastActivity = activity;
+        }
+
+        if (
+            client.name === '—' &&
+            name !== '—'
+        ) {
+            client.name = name;
+        }
+
+        if (
+            client.company === '—' &&
+            company !== '—'
+        ) {
+            client.company = company;
+        }
+
+        if (
+            client.phone === '—' &&
+            phone !== '—'
+        ) {
+            client.phone = phone;
+        }
+
+        if (
+            client.service === '—' &&
+            service !== '—'
+        ) {
+            client.service = service;
+        }
+    });
+
+    const clientList = Array.from(
+        clients.values()
+    );
+
+    console.log(
+        'CLIENTS FOUND:',
+        clientList
+    );
+
+    if (!clientList.length) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="6" class="text-center">
+                    No clients yet.
+                </td>
+            </tr>
+        `;
+        return;
+    }
+
+    clientList.sort(function (a, b) {
+        const dateA = a.lastActivity
+            ? new Date(a.lastActivity).getTime()
+            : 0;
+
+        const dateB = b.lastActivity
+            ? new Date(b.lastActivity).getTime()
+            : 0;
+
+        return dateB - dateA;
+    });
+
+    tbody.innerHTML = clientList.map(
+        function (client) {
+            return `
                 <tr>
-                    <td colspan="6" class="text-center">
-                        No clients yet.
+                    <td>
+                        <strong>
+                            ${escapeHtml(client.name)}
+                        </strong>
+                    </td>
+
+                    <td>
+                        ${escapeHtml(client.company)}
+                    </td>
+
+                    <td>
+                        ${escapeHtml(client.email)}
+                    </td>
+
+                    <td>
+                        ${escapeHtml(client.phone)}
+                    </td>
+
+                    <td>
+                        ${escapeHtml(client.service)}
+                    </td>
+
+                    <td>
+                        ${escapeHtml(
+                            formatDate(
+                                client.lastActivity
+                            )
+                        )}
                     </td>
                 </tr>
             `;
-            return;
         }
+    ).join('');
+}
 
-        clientList.sort(function (a, b) {
-            return (
-                new Date(b.lastActivity || 0) -
-                new Date(a.lastActivity || 0)
-            );
-        });
-
-        tbody.innerHTML = clientList.map(
-            function (client) {
-
-                return `
-                    <tr>
-
-                        <td>
-                            <strong>
-                                ${escapeHtml(client.name)}
-                            </strong>
-                        </td>
-
-                        <td>
-                            ${escapeHtml(client.company)}
-                        </td>
-
-                        <td>
-                            ${escapeHtml(client.email)}
-                        </td>
-
-                        <td>
-                            ${escapeHtml(client.phone)}
-                        </td>
-
-                        <td>
-                            ${escapeHtml(client.service)}
-                        </td>
-
-                        <td>
-                            ${escapeHtml(
-                                formatDate(
-                                    client.lastActivity
-                                )
-                            )}
-                        </td>
-
-                    </tr>
-                `;
-            }
-        ).join('');
-    }
-
-    function loadProjects() {
-        const container =
-            $('projectsContainer');
-
-        if (!container) {
-            return;
-        }
-
-        container.innerHTML = `
-            <div class="col-12">
-                <div class="text-center p-4">
-                    <p class="text-muted mb-0">
-                        No projects added yet.
-                    </p>
-                </div>
-            </div>
-        `;
-    }
-
-    async function loadBookings() {
+async function loadBookings() {
     const tbody = $('bookingsTableBody');
 
     if (!tbody) {
@@ -698,14 +894,7 @@ if (!email) {
         console.log('ALL SUBMISSIONS:', submissions);
 
         const bookings = submissions.filter(function (item) {
-            const type = normalizeType(item);
-
-            return (
-                type === 'booking' ||
-                type === 'bookings' ||
-                type === 'booking_request' ||
-                type === 'booking-request'
-            );
+            return normalizeType(item) === 'booking';
         });
 
         console.log('BOOKINGS FOUND:', bookings);
@@ -713,7 +902,6 @@ if (!email) {
         renderBookings(bookings);
 
     } catch (error) {
-
         console.error('Bookings error:', error);
 
         tbody.innerHTML = `
@@ -726,7 +914,7 @@ if (!email) {
     }
 }
 
-    async function loadContacts() {
+async function loadContacts() {
     const tbody = $('contactSubmissionsTableBody');
 
     if (!tbody) {
@@ -750,15 +938,7 @@ if (!email) {
         console.log('ALL SUBMISSIONS:', submissions);
 
         const contacts = submissions.filter(function (item) {
-            const type = normalizeType(item);
-
-            return (
-                type === 'contact' ||
-                type === 'contacts' ||
-                type === 'contact_form' ||
-                type === 'contact-form' ||
-                type === 'message'
-            );
+            return normalizeType(item) === 'contact';
         });
 
         console.log('CONTACTS FOUND:', contacts);
@@ -766,7 +946,6 @@ if (!email) {
         renderContacts(contacts);
 
     } catch (error) {
-
         console.error('Contacts error:', error);
 
         tbody.innerHTML = `
@@ -778,7 +957,6 @@ if (!email) {
         `;
     }
 }
-
     async function loadClients() {
     const tbody = $('clientsTableBody');
 
@@ -819,68 +997,63 @@ if (!email) {
 }
     function showSection(sectionName) {
 
-        console.log(
-            'Opening admin section:',
-            sectionName
+    console.log(
+        'Opening admin section:',
+        sectionName
+    );
+
+    const sections =
+        document.querySelectorAll(
+            '.admin-section'
         );
 
-        const sections =
-            document.querySelectorAll(
-                '.admin-section'
-            );
+    const navItems =
+        document.querySelectorAll(
+            '.admin-nav-item'
+        );
 
-        const navItems =
-            document.querySelectorAll(
-                '.admin-nav-item'
-            );
+    sections.forEach(function (section) {
 
-        sections.forEach(function (section) {
+        const active =
+            section.dataset.section ===
+            sectionName;
 
-            const active =
-                section.dataset.section ===
-                sectionName;
-
-            section.classList.toggle(
-                'd-none',
-                !active
-            );
-
-            section.classList.toggle(
-                'admin-section--active',
-                active
-            );
-        });
-
-        navItems.forEach(function (item) {
-
-            item.classList.toggle(
-                'active',
-                item.dataset.section ===
-                sectionName
-            );
-        });
-
-        if (sectionName === 'dashboard') {
-            updateMetrics();
+        if (active) {
+            section.classList.remove('d-none');
+            section.classList.add('admin-section--active');
+            section.style.display = 'block';
+        } else {
+            section.classList.add('d-none');
+            section.classList.remove('admin-section--active');
+            section.style.display = 'none';
         }
+    });
 
-        if (sectionName === 'bookings') {
-            loadBookings();
-        }
+    navItems.forEach(function (item) {
 
-        if (sectionName === 'clients') {
-            loadClients();
-        }
+        item.classList.toggle(
+            'active',
+            item.dataset.section ===
+            sectionName
+        );
+    });
 
-        if (sectionName === 'projects') {
-            loadProjects();
-        }
-
-        if (sectionName === 'contact-forms') {
-            loadContacts();
-        }
+    if (sectionName === 'dashboard') {
+        updateMetrics();
     }
 
+    if (sectionName === 'bookings') {
+        loadBookings();
+    }
+
+    if (sectionName === 'clients') {
+        loadClients();
+    }
+
+    if (sectionName === 'contact-forms') {
+        loadContacts();
+    }
+}
     async function login(password) {
 
         const response =
@@ -1076,24 +1249,9 @@ if (!email) {
         );
     }
 
-    const addProject =
-        $('addProjectBtn');
-
-    if (addProject) {
-
-        addProject.addEventListener(
-            'click',
-            function () {
-                alert(
-                    'Project management will be added later.'
-                );
-            }
-        );
-    }
-
     document.addEventListener(
-        'click',
-        function (event) {
+    'click',
+    async function (event) {
 
             const button =
                 event.target.closest(
@@ -1108,10 +1266,100 @@ if (!email) {
                 button.dataset.action;
 
             if (action === 'reply') {
-                alert(
-                    'Reply functionality will be connected later.'
-                );
+    const row = button.closest('tr');
+
+    if (!row) {
+        return;
+    }
+
+    const emailElement = row.querySelector(
+        'td:nth-child(6) strong'
+    );
+
+    const recipient = emailElement
+        ? emailElement.textContent.trim()
+        : '';
+
+    if (!recipient || !recipient.includes('@')) {
+        alert('Unable to find the client email address.');
+        return;
+    }
+
+    const subject = prompt(
+        'Enter email subject:'
+    );
+
+    if (!subject || !subject.trim()) {
+        return;
+    }
+
+    const message = prompt(
+        'Enter your reply message:'
+    );
+
+    if (!message || !message.trim()) {
+        return;
+    }
+
+    if (!adminToken) {
+        alert('Please log in again.');
+        return;
+    }
+
+    button.disabled = true;
+
+    try {
+
+        const response = await apiFetch(
+            `${API_URL}/api/admin/reply`,
+            {
+                method: 'POST',
+                headers: getHeaders(),
+                body: JSON.stringify({
+                    recipient: recipient,
+                    subject: subject.trim(),
+                    message: message.trim()
+                })
             }
+        );
+
+        const data = await response.json();
+
+        if (response.status === 401) {
+            clearLogin();
+            throw new Error(
+                'Admin session expired. Please log in again.'
+            );
+        }
+
+        if (!response.ok) {
+            throw new Error(
+                data.error ||
+                'Unable to send reply.'
+            );
+        }
+
+        alert(
+            'Reply sent successfully.'
+        );
+
+    } catch (error) {
+
+        console.error(
+            'Reply error:',
+            error
+        );
+
+        alert(
+            error.message ||
+            'Unable to send reply.'
+        );
+
+    } finally {
+
+        button.disabled = false;
+    }
+}
 
             if (action === 'note') {
                 alert(
@@ -1383,26 +1631,22 @@ if (!email) {
 
     if (adminToken) {
 
-        console.log(
-            'Existing admin token found.'
-        );
+    console.log(
+        'Existing admin token found.'
+    );
 
-        showDashboard();
+    showDashboard();
 
-        showSection(
-            'dashboard'
-        );
+    showSection('dashboard');
 
-        updateMetrics();
+} else {
 
-    } else {
+    console.log(
+        'No admin token found.'
+    );
 
-        console.log(
-            'No admin token found.'
-        );
-
-        showLogin();
-    }
+    showLogin();
+}
 
     console.log(
         'Prime Tech Admin System initialized.'

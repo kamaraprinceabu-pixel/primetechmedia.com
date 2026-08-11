@@ -1,0 +1,24 @@
+[
+  {
+    "id": 1,
+    "action": "new message",
+    "resource": "submissions",
+    "itemId": 1,
+    "details": {
+      "type": "contact"
+    },
+    "user": "public",
+    "createdAt": "2026-08-07T21:36:05Z"
+  },
+  {
+    "id": 2,
+    "action": "new message",
+    "resource": "submissions",
+    "itemId": 2,
+    "details": {
+      "type": "contact"
+    },
+    "user": "public",
+    "createdAt": "2026-08-07T21:45:47Z"
+  }
+]
