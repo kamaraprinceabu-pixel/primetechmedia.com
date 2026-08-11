@@ -4,6 +4,8 @@ import hmac
 import json
 import os
 import secrets
+import smtplib
+from email.message import EmailMessage
 import urllib.error
 import urllib.request
 from datetime import datetime, timezone
@@ -16,6 +18,8 @@ SUPABASE_URL = os.environ.get("SUPABASE_URL", "").rstrip("/")
 SUPABASE_SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_KEY", "")
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "")
 ADMIN_SECRET = os.environ.get("ADMIN_SECRET", "")
+GMAIL_SMTP_USER = os.environ.get("GMAIL_SMTP_USER", "")
+GMAIL_SMTP_PASSWORD = os.environ.get("GMAIL_SMTP_PASSWORD", "")
 
 TABLE_URL = f"{SUPABASE_URL}/rest/v1/submissions"
 
@@ -192,6 +196,34 @@ def verify_admin_token(token):
     except Exception:
         return False
 
+def send_email_reply(recipient, subject, message):
+    if not GMAIL_SMTP_USER or not GMAIL_SMTP_PASSWORD:
+        raise RuntimeError(
+            "Gmail SMTP environment variables are not configured"
+        )
+
+    email = EmailMessage()
+
+    email["From"] = GMAIL_SMTP_USER
+    email["To"] = recipient
+    email["Subject"] = subject
+
+    email.set_content(message)
+
+    with smtplib.SMTP(
+        "smtp.gmail.com",
+        587,
+        timeout=30
+    ) as smtp:
+
+        smtp.starttls()
+
+        smtp.login(
+            GMAIL_SMTP_USER,
+            GMAIL_SMTP_PASSWORD
+        )
+
+        smtp.send_message(email)
 
 class Handler(BaseHTTPRequestHandler):
 
@@ -351,6 +383,106 @@ class Handler(BaseHTTPRequestHandler):
         )
 
     def do_POST(self):
+
+        if self.path == "/api/admin/reply":
+
+            if not self.require_admin():
+                return
+
+            try:
+
+                content_length = int(
+                    self.headers.get(
+                        "Content-Length",
+                        "0"
+                    )
+                )
+
+                raw_body = self.rfile.read(
+                    content_length
+                )
+
+                data = json.loads(
+                    raw_body.decode("utf-8")
+                )
+
+                recipient = str(
+                    data.get("recipient", "")
+                ).strip()
+
+                subject = str(
+                    data.get("subject", "")
+                ).strip()
+
+                message = str(
+                    data.get("message", "")
+                ).strip()
+
+                if not recipient:
+                    self.send_json(
+                        400,
+                        {
+                            "error": "Recipient email is required"
+                        }
+                    )
+                    return
+
+                if not subject:
+                    self.send_json(
+                        400,
+                        {
+                            "error": "Email subject is required"
+                        }
+                    )
+                    return
+
+                if not message:
+                    self.send_json(
+                        400,
+                        {
+                            "error": "Reply message is required"
+                        }
+                    )
+                    return
+
+                send_email_reply(
+                    recipient,
+                    subject,
+                    message
+                )
+
+                self.send_json(
+                    200,
+                    {
+                        "success": True,
+                        "message": "Reply sent successfully"
+                    }
+                )
+
+            except json.JSONDecodeError:
+
+                self.send_json(
+                    400,
+                    {
+                        "error": "Invalid JSON"
+                    }
+                )
+
+            except Exception as error:
+
+                print(
+                    f"Send reply error: {error}",
+                    flush=True
+                )
+
+                self.send_json(
+                    500,
+                    {
+                        "error": "Unable to send email reply"
+                    }
+                )
+
+            return
 
         if self.path == "/api/admin/login":
 
