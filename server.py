@@ -5,6 +5,7 @@ import json
 import os
 import secrets
 import smtplib
+import urllib.parse
 import urllib.error
 import urllib.request
 from datetime import datetime, timezone
@@ -47,6 +48,11 @@ GMAIL_SMTP_PASSWORD = os.environ.get(
     ""
 )
 
+RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
+RESEND_FROM_EMAIL = os.environ.get(
+    "RESEND_FROM_EMAIL",
+    "onboarding@resend.dev"
+)
 
 TABLE_URL = f"{SUPABASE_URL}/rest/v1/submissions"
 
@@ -312,51 +318,77 @@ def verify_admin_token(token):
         return False
 
 
-def send_email_reply(
-    recipient,
-    subject,
-    message
-):
+def send_email_reply(recipient, subject, message):
 
-    if not GMAIL_SMTP_USER:
+    if not RESEND_API_KEY:
         raise RuntimeError(
-            "GMAIL_SMTP_USER is not configured"
+            "RESEND_API_KEY is not configured"
         )
 
-    if not GMAIL_SMTP_PASSWORD:
-        raise RuntimeError(
-            "GMAIL_SMTP_PASSWORD is not configured"
-        )
+    payload = json.dumps({
+        "from": RESEND_FROM_EMAIL,
+        "to": [recipient],
+        "subject": subject,
+        "text": message
+    }).encode("utf-8")
 
-    email = EmailMessage()
-
-    email["From"] = GMAIL_SMTP_USER
-    email["To"] = recipient
-    email["Subject"] = subject
-
-    email.set_content(
-        message
+    request = urllib.request.Request(
+        "https://api.resend.com/emails",
+        data=payload,
+        headers={
+            "Authorization": f"Bearer {RESEND_API_KEY}",
+            "Content-Type": "application/json"
+        },
+        method="POST"
     )
 
-    with smtplib.SMTP(
-        "smtp.gmail.com",
-        587,
-        timeout=30
-    ) as smtp:
+    try:
 
-        smtp.ehlo()
+        with urllib.request.urlopen(
+            request,
+            timeout=30
+        ) as response:
 
-        smtp.starttls()
+            response_body = (
+                response
+                .read()
+                .decode("utf-8")
+            )
 
-        smtp.ehlo()
+            if not response_body:
+                return {}
 
-        smtp.login(
-            GMAIL_SMTP_USER,
-            GMAIL_SMTP_PASSWORD
+            return json.loads(
+                response_body
+            )
+
+    except urllib.error.HTTPError as error:
+
+        error_body = (
+            error
+            .read()
+            .decode("utf-8")
         )
 
-        smtp.send_message(
-            email
+        print(
+            f"Resend API error {error.code}: "
+            f"{error_body}",
+            flush=True
+        )
+
+        raise RuntimeError(
+            f"Resend email failed: {error_body}"
+        )
+
+    except urllib.error.URLError as error:
+
+        print(
+            f"Resend connection error: {error}",
+            flush=True
+        )
+
+        raise RuntimeError(
+            "Unable to connect to Resend email service"
         )
 
 
