@@ -5,26 +5,54 @@ import json
 import os
 import secrets
 import smtplib
-from email.message import EmailMessage
 import urllib.error
 import urllib.request
 from datetime import datetime, timezone
+from email.message import EmailMessage
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
 
 HOST = "0.0.0.0"
 PORT = int(os.environ.get("PORT", "8001"))
 
-SUPABASE_URL = os.environ.get("SUPABASE_URL", "").rstrip("/")
-SUPABASE_SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_KEY", "")
-ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "")
-ADMIN_SECRET = os.environ.get("ADMIN_SECRET", "")
-GMAIL_SMTP_USER = os.environ.get("GMAIL_SMTP_USER", "")
-GMAIL_SMTP_PASSWORD = os.environ.get("GMAIL_SMTP_PASSWORD", "")
+
+SUPABASE_URL = os.environ.get(
+    "SUPABASE_URL",
+    ""
+).rstrip("/")
+
+SUPABASE_SERVICE_KEY = os.environ.get(
+    "SUPABASE_SERVICE_KEY",
+    ""
+)
+
+ADMIN_PASSWORD = os.environ.get(
+    "ADMIN_PASSWORD",
+    ""
+)
+
+ADMIN_SECRET = os.environ.get(
+    "ADMIN_SECRET",
+    ""
+)
+
+
+GMAIL_SMTP_USER = os.environ.get(
+    "GMAIL_SMTP_USER",
+    ""
+)
+
+GMAIL_SMTP_PASSWORD = os.environ.get(
+    "GMAIL_SMTP_PASSWORD",
+    ""
+)
+
 
 TABLE_URL = f"{SUPABASE_URL}/rest/v1/submissions"
 
 
 def supabase_request(method, url, data=None):
+
     if not SUPABASE_URL or not SUPABASE_SERVICE_KEY:
         raise RuntimeError(
             "Supabase environment variables are not configured"
@@ -56,19 +84,32 @@ def supabase_request(method, url, data=None):
     )
 
     try:
+
         with urllib.request.urlopen(
             request,
             timeout=30
         ) as response:
-            response_body = response.read().decode("utf-8")
+
+            response_body = (
+                response
+                .read()
+                .decode("utf-8")
+            )
 
             if not response_body:
                 return {}
 
-            return json.loads(response_body)
+            return json.loads(
+                response_body
+            )
 
     except urllib.error.HTTPError as error:
-        error_body = error.read().decode("utf-8")
+
+        error_body = (
+            error
+            .read()
+            .decode("utf-8")
+        )
 
         print(
             f"Supabase error {error.code}: {error_body}",
@@ -81,35 +122,74 @@ def supabase_request(method, url, data=None):
 
 
 def convert_submission(data):
+
     return {
-        "type": data.get("type", "contact"),
-        "name": data.get("name"),
-        "phone": data.get("phone"),
-        "email": data.get("email"),
-        "company": data.get("company"),
-        "service": data.get("service"),
-        "date": data.get("date") or None,
-        "time": data.get("time"),
-        "budget": data.get("budget"),
-        "message": data.get("message"),
-        "created_at": data.get("createdAt")
-        or datetime.now(timezone.utc).isoformat()
+        "type": data.get(
+            "type",
+            "contact"
+        ),
+
+        "name": data.get(
+            "name"
+        ),
+
+        "phone": data.get(
+            "phone"
+        ),
+
+        "email": data.get(
+            "email"
+        ),
+
+        "company": data.get(
+            "company"
+        ),
+
+        "service": data.get(
+            "service"
+        ),
+
+        "date": data.get(
+            "date"
+        ) or None,
+
+        "time": data.get(
+            "time"
+        ),
+
+        "budget": data.get(
+            "budget"
+        ),
+
+        "message": data.get(
+            "message"
+        ),
+
+        "created_at": data.get(
+            "createdAt"
+        ) or datetime.now(
+            timezone.utc
+        ).isoformat()
     }
 
 
 def get_secret():
+
     if ADMIN_SECRET:
         return ADMIN_SECRET
 
     if ADMIN_PASSWORD:
         return hashlib.sha256(
-            ADMIN_PASSWORD.encode("utf-8")
+            ADMIN_PASSWORD.encode(
+                "utf-8"
+            )
         ).hexdigest()
 
     return ""
 
 
 def create_admin_token():
+
     secret = get_secret()
 
     if not secret:
@@ -118,27 +198,46 @@ def create_admin_token():
         )
 
     timestamp = str(
-        int(datetime.now(timezone.utc).timestamp())
+        int(
+            datetime.now(
+                timezone.utc
+            ).timestamp()
+        )
     )
 
-    nonce = secrets.token_urlsafe(24)
+    nonce = secrets.token_urlsafe(
+        24
+    )
 
-    payload = f"{timestamp}.{nonce}"
+    payload = (
+        f"{timestamp}.{nonce}"
+    )
 
     signature = hmac.new(
-        secret.encode("utf-8"),
-        payload.encode("utf-8"),
+        secret.encode(
+            "utf-8"
+        ),
+        payload.encode(
+            "utf-8"
+        ),
         hashlib.sha256
     ).hexdigest()
 
-    token_data = f"{payload}.{signature}"
+    token_data = (
+        f"{payload}.{signature}"
+    )
 
     return base64.urlsafe_b64encode(
-        token_data.encode("utf-8")
-    ).decode("utf-8").rstrip("=")
+        token_data.encode(
+            "utf-8"
+        )
+    ).decode(
+        "utf-8"
+    ).rstrip("=")
 
 
 def verify_admin_token(token):
+
     if not token:
         return False
 
@@ -148,13 +247,18 @@ def verify_admin_token(token):
         return False
 
     try:
+
         padding = "=" * (
             4 - len(token) % 4
         )
 
-        decoded = base64.urlsafe_b64decode(
-            token + padding
-        ).decode("utf-8")
+        decoded = (
+            base64
+            .urlsafe_b64decode(
+                token + padding
+            )
+            .decode("utf-8")
+        )
 
         parts = decoded.split(".")
 
@@ -163,11 +267,17 @@ def verify_admin_token(token):
 
         timestamp, nonce, signature = parts
 
-        payload = f"{timestamp}.{nonce}"
+        payload = (
+            f"{timestamp}.{nonce}"
+        )
 
         expected_signature = hmac.new(
-            secret.encode("utf-8"),
-            payload.encode("utf-8"),
+            secret.encode(
+                "utf-8"
+            ),
+            payload.encode(
+                "utf-8"
+            ),
             hashlib.sha256
         ).hexdigest()
 
@@ -177,10 +287,14 @@ def verify_admin_token(token):
         ):
             return False
 
-        token_time = int(timestamp)
+        token_time = int(
+            timestamp
+        )
 
         current_time = int(
-            datetime.now(timezone.utc).timestamp()
+            datetime.now(
+                timezone.utc
+            ).timestamp()
         )
 
         max_age = 60 * 60 * 24
@@ -194,12 +308,24 @@ def verify_admin_token(token):
         return True
 
     except Exception:
+
         return False
 
-def send_email_reply(recipient, subject, message):
-    if not GMAIL_SMTP_USER or not GMAIL_SMTP_PASSWORD:
+
+def send_email_reply(
+    recipient,
+    subject,
+    message
+):
+
+    if not GMAIL_SMTP_USER:
         raise RuntimeError(
-            "Gmail SMTP environment variables are not configured"
+            "GMAIL_SMTP_USER is not configured"
+        )
+
+    if not GMAIL_SMTP_PASSWORD:
+        raise RuntimeError(
+            "GMAIL_SMTP_PASSWORD is not configured"
         )
 
     email = EmailMessage()
@@ -208,7 +334,9 @@ def send_email_reply(recipient, subject, message):
     email["To"] = recipient
     email["Subject"] = subject
 
-    email.set_content(message)
+    email.set_content(
+        message
+    )
 
     with smtplib.SMTP(
         "smtp.gmail.com",
@@ -216,21 +344,39 @@ def send_email_reply(recipient, subject, message):
         timeout=30
     ) as smtp:
 
+        smtp.ehlo()
+
         smtp.starttls()
+
+        smtp.ehlo()
 
         smtp.login(
             GMAIL_SMTP_USER,
             GMAIL_SMTP_PASSWORD
         )
 
-        smtp.send_message(email)
+        smtp.send_message(
+            email
+        )
+
 
 class Handler(BaseHTTPRequestHandler):
 
-    def send_json(self, status, data):
-        response = json.dumps(data).encode("utf-8")
+    def send_json(
+        self,
+        status,
+        data
+    ):
 
-        self.send_response(status)
+        response = json.dumps(
+            data
+        ).encode(
+            "utf-8"
+        )
+
+        self.send_response(
+            status
+        )
 
         self.send_header(
             "Content-Type",
@@ -259,10 +405,16 @@ class Handler(BaseHTTPRequestHandler):
 
         self.end_headers()
 
-        self.wfile.write(response)
+        self.wfile.write(
+            response
+        )
+
 
     def do_OPTIONS(self):
-        self.send_response(204)
+
+        self.send_response(
+            204
+        )
 
         self.send_header(
             "Access-Control-Allow-Origin",
@@ -281,7 +433,9 @@ class Handler(BaseHTTPRequestHandler):
 
         self.end_headers()
 
+
     def get_auth_token(self):
+
         authorization = self.headers.get(
             "Authorization",
             ""
@@ -292,12 +446,19 @@ class Handler(BaseHTTPRequestHandler):
         ):
             return None
 
-        return authorization[7:].strip()
+        return authorization[
+            7:
+        ].strip()
+
 
     def require_admin(self):
+
         token = self.get_auth_token()
 
-        if not verify_admin_token(token):
+        if not verify_admin_token(
+            token
+        ):
+
             self.send_json(
                 401,
                 {
@@ -309,9 +470,11 @@ class Handler(BaseHTTPRequestHandler):
 
         return True
 
+
     def do_GET(self):
 
         if self.path == "/" or self.path == "":
+
             self.send_json(
                 200,
                 {
@@ -319,10 +482,14 @@ class Handler(BaseHTTPRequestHandler):
                     "message": "PrimeTech API is running"
                 }
             )
+
             return
 
+
         if self.path == "/api/admin/session":
+
             if self.require_admin():
+
                 self.send_json(
                     200,
                     {
@@ -332,12 +499,14 @@ class Handler(BaseHTTPRequestHandler):
 
             return
 
+
         if self.path == "/api/submissions":
 
             if not self.require_admin():
                 return
 
             try:
+
                 submissions = supabase_request(
                     "GET",
                     f"{TABLE_URL}?select=*&order=created_at.desc"
@@ -346,13 +515,18 @@ class Handler(BaseHTTPRequestHandler):
                 formatted = []
 
                 for submission in submissions:
-                    item = dict(submission)
+
+                    item = dict(
+                        submission
+                    )
 
                     item["createdAt"] = item.get(
                         "created_at"
                     )
 
-                    formatted.append(item)
+                    formatted.append(
+                        item
+                    )
 
                 self.send_json(
                     200,
@@ -375,6 +549,7 @@ class Handler(BaseHTTPRequestHandler):
 
             return
 
+
         self.send_json(
             404,
             {
@@ -382,111 +557,13 @@ class Handler(BaseHTTPRequestHandler):
             }
         )
 
+
     def do_POST(self):
-
-        if self.path == "/api/admin/reply":
-
-            if not self.require_admin():
-                return
-
-            try:
-
-                content_length = int(
-                    self.headers.get(
-                        "Content-Length",
-                        "0"
-                    )
-                )
-
-                raw_body = self.rfile.read(
-                    content_length
-                )
-
-                data = json.loads(
-                    raw_body.decode("utf-8")
-                )
-
-                recipient = str(
-                    data.get("recipient", "")
-                ).strip()
-
-                subject = str(
-                    data.get("subject", "")
-                ).strip()
-
-                message = str(
-                    data.get("message", "")
-                ).strip()
-
-                if not recipient:
-                    self.send_json(
-                        400,
-                        {
-                            "error": "Recipient email is required"
-                        }
-                    )
-                    return
-
-                if not subject:
-                    self.send_json(
-                        400,
-                        {
-                            "error": "Email subject is required"
-                        }
-                    )
-                    return
-
-                if not message:
-                    self.send_json(
-                        400,
-                        {
-                            "error": "Reply message is required"
-                        }
-                    )
-                    return
-
-                send_email_reply(
-                    recipient,
-                    subject,
-                    message
-                )
-
-                self.send_json(
-                    200,
-                    {
-                        "success": True,
-                        "message": "Reply sent successfully"
-                    }
-                )
-
-            except json.JSONDecodeError:
-
-                self.send_json(
-                    400,
-                    {
-                        "error": "Invalid JSON"
-                    }
-                )
-
-            except Exception as error:
-
-                print(
-                    f"Send reply error: {error}",
-                    flush=True
-                )
-
-                self.send_json(
-                    500,
-                    {
-                        "error": "Unable to send email reply"
-                    }
-                )
-
-            return
 
         if self.path == "/api/admin/login":
 
             try:
+
                 content_length = int(
                     self.headers.get(
                         "Content-Length",
@@ -499,7 +576,9 @@ class Handler(BaseHTTPRequestHandler):
                 )
 
                 data = json.loads(
-                    raw_body.decode("utf-8")
+                    raw_body.decode(
+                        "utf-8"
+                    )
                 )
 
                 password = data.get(
@@ -508,6 +587,7 @@ class Handler(BaseHTTPRequestHandler):
                 )
 
                 if not ADMIN_PASSWORD:
+
                     self.send_json(
                         500,
                         {
@@ -521,6 +601,7 @@ class Handler(BaseHTTPRequestHandler):
                     password,
                     ADMIN_PASSWORD
                 ):
+
                     self.send_json(
                         401,
                         {
@@ -565,6 +646,7 @@ class Handler(BaseHTTPRequestHandler):
 
             return
 
+
         if self.path == "/api/admin/logout":
 
             self.send_json(
@@ -576,6 +658,125 @@ class Handler(BaseHTTPRequestHandler):
 
             return
 
+
+        if self.path == "/api/admin/reply":
+
+            if not self.require_admin():
+                return
+
+            try:
+
+                content_length = int(
+                    self.headers.get(
+                        "Content-Length",
+                        "0"
+                    )
+                )
+
+                raw_body = self.rfile.read(
+                    content_length
+                )
+
+                data = json.loads(
+                    raw_body.decode(
+                        "utf-8"
+                    )
+                )
+
+                recipient = str(
+                    data.get(
+                        "recipient",
+                        ""
+                    )
+                ).strip()
+
+                subject = str(
+                    data.get(
+                        "subject",
+                        ""
+                    )
+                ).strip()
+
+                message = str(
+                    data.get(
+                        "message",
+                        ""
+                    )
+                ).strip()
+
+                if not recipient:
+
+                    self.send_json(
+                        400,
+                        {
+                            "error": "Recipient email is required"
+                        }
+                    )
+
+                    return
+
+                if not subject:
+
+                    self.send_json(
+                        400,
+                        {
+                            "error": "Email subject is required"
+                        }
+                    )
+
+                    return
+
+                if not message:
+
+                    self.send_json(
+                        400,
+                        {
+                            "error": "Reply message is required"
+                        }
+                    )
+
+                    return
+
+                send_email_reply(
+                    recipient,
+                    subject,
+                    message
+                )
+
+                self.send_json(
+                    200,
+                    {
+                        "success": True,
+                        "message": "Reply sent successfully"
+                    }
+                )
+
+            except json.JSONDecodeError:
+
+                self.send_json(
+                    400,
+                    {
+                        "error": "Invalid JSON"
+                    }
+                )
+
+            except Exception as error:
+
+                print(
+                    f"Send reply error: {error}",
+                    flush=True
+                )
+
+                self.send_json(
+                    500,
+                    {
+                        "error": str(error)
+                    }
+                )
+
+            return
+
+
         if self.path != "/api/submissions":
 
             self.send_json(
@@ -586,6 +787,7 @@ class Handler(BaseHTTPRequestHandler):
             )
 
             return
+
 
         try:
 
@@ -601,7 +803,9 @@ class Handler(BaseHTTPRequestHandler):
             )
 
             data = json.loads(
-                raw_body.decode("utf-8")
+                raw_body.decode(
+                    "utf-8"
+                )
             )
 
             submission = convert_submission(
@@ -618,13 +822,18 @@ class Handler(BaseHTTPRequestHandler):
                 isinstance(result, list)
                 and result
             ):
+
                 saved = result[0]
+
             else:
+
                 saved = submission
 
             saved["createdAt"] = saved.get(
                 "created_at",
-                saved.get("createdAt")
+                saved.get(
+                    "createdAt"
+                )
             )
 
             self.send_json(
@@ -654,6 +863,7 @@ class Handler(BaseHTTPRequestHandler):
                     "error": "Unable to save submission"
                 }
             )
+
 
     def do_DELETE(self):
 
@@ -699,9 +909,12 @@ class Handler(BaseHTTPRequestHandler):
                 }
             )
 
+
     def do_HEAD(self):
 
-        self.send_response(200)
+        self.send_response(
+            200
+        )
 
         self.send_header(
             "Access-Control-Allow-Origin",
