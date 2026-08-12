@@ -1,8 +1,14 @@
-@media (max-width: 1050px) {
+@media (max-width: 991px) {
+    .hero-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .stat-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
 
     .admin-layout {
         grid-template-columns: 1fr;
-        width: 100%;
     }
 
     .dashboard-metrics {
@@ -12,67 +18,50 @@
     .feature-pill-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
-
-    .admin-layout,
-    .admin-content,
-    .admin-sidebar,
-    .admin-panel,
-    .admin-section {
-        min-width: 0;
-        max-width: 100%;
-    }
-
-    .admin-content {
-        width: 100%;
-        overflow: hidden;
-    }
-
-    .admin-panel {
-        width: 100%;
-        box-sizing: border-box;
-    }
-
-    .table-responsive {
-        width: 100%;
-        max-width: 100%;
-        overflow-x: auto;
-        overflow-y: hidden;
-        -webkit-overflow-scrolling: touch;
-    }
 }
-
-
-@media (max-width: 991px) {
-
-    .hero-grid {
-        grid-template-columns: 1fr;
-    }
-
-    .stat-grid {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-}
-
 
 @media (max-width: 767px) {
-
-    html,
-    body {
-        max-width: 100%;
-        overflow-x: hidden;
+    section {
+        padding: 80px 0;
     }
 
-    section {
-        padding: 70px 0;
+    .container {
+        padding-left: 20px;
+        padding-right: 20px;
+        width: 100%;
+        max-width: 100%;
     }
 
     .hero-section {
-        padding-top: 100px;
+        padding-top: 110px;
+        padding-bottom: 80px;
+    }
+
+    .hero-grid {
+        grid-template-columns: 1fr;
+        gap: 30px;
+    }
+
+    .hero-copy h1,
+    .page-hero h1,
+    .section-heading h2 {
+        font-size: 2.3rem;
+        line-height: 1.2;
+    }
+
+    .hero-copy p,
+    .page-hero p {
+        font-size: 1rem;
     }
 
     .hero-actions {
         flex-direction: column;
-        align-items: flex-start;
+        align-items: stretch;
+        gap: 12px;
+    }
+
+    .hero-actions .btn {
+        width: 100%;
     }
 
     .stat-grid {
@@ -87,266 +76,79 @@
         flex-direction: column;
     }
 
-
-    /* ADMIN DASHBOARD */
-
-    .admin-layout {
-        display: flex;
-        flex-direction: column;
-        gap: 16px;
+    .newsletter-form input,
+    .newsletter-form button {
         width: 100%;
-        min-width: 0;
+    }
+
+    .service-card,
+    .price-card,
+    .blog-card,
+    .team-card,
+    .glass-card,
+    .contact-form {
+        padding: 24px;
+    }
+
+    .portfolio-card img {
+        height: 220px;
+    }
+
+    .page-hero {
+        padding: 100px 0 65px;
+    }
+
+    .footer {
+        padding: 60px 0 20px;
+    }
+
+    .navbar-brand {
+        gap: 8px;
+    }
+
+    .brand-logo-wrap {
+        min-width: 42px;
+        min-height: 42px;
+        margin-right: 8px;
+    }
+
+    .brand-logo-icon {
+        height: 42px;
+    }
+
+    .brand-text {
+        display: none;
+    }
+
+    .admin-toolbar {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .dashboard-metrics,
+    .feature-pill-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .admin-panel {
+        padding: 24px;
     }
 
     .admin-sidebar {
-        width: 100%;
-        padding: 16px;
-        border-radius: 18px;
-        box-sizing: border-box;
-        min-width: 0;
+        padding: 22px;
     }
 
     .admin-content {
         width: 100%;
-        min-width: 0;
-        max-width: 100%;
-        overflow: hidden;
     }
-
-    .admin-section {
-        width: 100%;
-        min-width: 0;
-        max-width: 100%;
-    }
-
-    .admin-panel {
-        width: 100%;
-        max-width: 100%;
-        padding: 18px;
-        border-radius: 18px;
-        box-sizing: border-box;
-    }
-
-    .admin-panel--subsection {
-        width: 100%;
-        max-width: 100%;
-        padding: 16px;
-        box-sizing: border-box;
-    }
-
-
-    /* ADMIN NAVIGATION */
-
-    .admin-nav {
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
-        width: 100%;
-    }
-
-    .admin-nav-item {
-        width: 100%;
-        min-height: 46px;
-        padding: 11px 14px;
-        box-sizing: border-box;
-        font-size: 0.9rem;
-    }
-
-    .sidebar-footer {
-        width: 100%;
-    }
-
-    .sidebar-footer .btn {
-        width: 100%;
-    }
-
-
-    /* DASHBOARD TOOLBAR */
-
-    .admin-toolbar {
-        width: 100%;
-        flex-direction: column;
-        align-items: stretch;
-        gap: 14px;
-        margin-bottom: 18px;
-    }
-
-    .admin-toolbar h3 {
-        font-size: 1.35rem;
-    }
-
-
-    /* METRICS */
-
-    .dashboard-metrics {
-        grid-template-columns: 1fr;
-        gap: 12px;
-        width: 100%;
-    }
-
-    .metric-card {
-        width: 100%;
-        padding: 18px;
-        box-sizing: border-box;
-    }
-
-    .metric-card h4 {
-        font-size: 1.7rem;
-    }
-
-
-    /* QUICK OVERVIEW */
-
-    .admin-features-panel {
-        width: 100%;
-        padding: 18px;
-        border-radius: 18px;
-        box-sizing: border-box;
-    }
-
-
-    /* SECTION HEADERS */
-
-    .admin-section-header {
-        display: flex;
-        flex-direction: column;
-        align-items: stretch;
-        gap: 12px;
-    }
-
-    .admin-section-header h3 {
-        font-size: 1.3rem;
-    }
-
-    .admin-section-header p {
-        font-size: 0.85rem;
-    }
-
-    .admin-section-header .btn {
-        width: 100%;
-    }
-
-
-    /* TABLES */
 
     .table-responsive {
         width: 100%;
-        max-width: 100%;
         overflow-x: auto;
-        overflow-y: hidden;
-        display: block;
         -webkit-overflow-scrolling: touch;
     }
 
     .submission-table {
-        width: 850px;
-        min-width: 850px;
-    }
-
-    .submission-table th,
-    .submission-table td {
-        padding: 11px 10px;
-        font-size: 0.82rem;
-        white-space: normal;
-    }
-
-    .admin-action-btn {
-        white-space: nowrap;
-    }
-
-
-    /* NAVBAR */
-
-    .navbar .container {
-        padding-left: 15px;
-        padding-right: 15px;
-    }
-
-    .navbar-brand {
-        max-width: calc(100% - 60px);
-    }
-
-    .brand-logo-wrap {
-        min-width: 40px;
-        min-height: 40px;
-    }
-
-    .brand-logo-icon {
-        height: 40px;
-    }
-
-    .navbar-toggler {
-        flex-shrink: 0;
-    }
-
-
-    /* BOOTSTRAP CONTAINER */
-
-    .container {
-        max-width: 100%;
-    }
-
-    .row {
-        margin-left: 0;
-        margin-right: 0;
-    }
-}
-
-
-@media (max-width: 480px) {
-
-    section {
-        padding: 55px 0;
-    }
-
-    .admin-panel {
-        padding: 14px;
-        border-radius: 16px;
-    }
-
-    .admin-sidebar {
-        padding: 14px;
-        border-radius: 16px;
-    }
-
-    .admin-nav-item {
-        font-size: 0.85rem;
-        padding: 10px 12px;
-    }
-
-    .metric-card {
-        padding: 16px;
-    }
-
-    .metric-card h4 {
-        font-size: 1.55rem;
-    }
-
-    .admin-features-panel {
-        padding: 16px;
-    }
-
-    .admin-panel--subsection {
-        padding: 12px;
-    }
-
-    .submission-table {
-        width: 800px;
-        min-width: 800px;
-    }
-
-    .submission-table th,
-    .submission-table td {
-        padding: 9px 8px;
-        font-size: 0.78rem;
-    }
-
-    .page-hero {
-        padding-left: 12px;
-        padding-right: 12px;
-    }
-
-    .page-hero h1 {
-        font-size: 1.55rem;
+        min-width: 700px;
     }
 }
